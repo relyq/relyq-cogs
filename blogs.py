@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import discord
@@ -81,17 +82,84 @@ class Blogs(commands.Cog):
             ctx.author, discord.PermissionOverwrite())
         overwrites[ctx.author].update(
             manage_channels=True, manage_messages=True,
-            send_messages=True, read_messages=True,
-            attach_files=True, embed_links=True,
-            external_emojis=True, external_stickers=True,
-            read_message_history=True)
+            send_messages=True)
 
         # create channel
         new = await ctx.guild.create_text_channel(name=name, category=category, overwrites=overwrites)
         async with self.config.guild(ctx.guild).text.active() as a:
             a.append((new.id, ctx.author.id, time.time()))
 
+        await new.send(f"{ctx.author.mention} welcome to your new blog!!")
+
+        async with new.typing():
+            await asyncio.sleep(1)
+        await new.send(f"its perms are currently synced to the blogs category")
+
+        async with new.typing():
+            await asyncio.sleep(1.25)
+        await new.send(f"but you can rename it and set its description to whatever you want")
+
+        async with new.typing():
+            await asyncio.sleep(1.5)
+        await new.send(f"you can also set it to private with `ltn blog set private` so only you can post")
+
+        async with new.typing():
+            await asyncio.sleep(2)
+        await new.send(f"in that case you can choose to share your blog with some ppl using `ltn blog share @relyq`")
+
+        async with new.typing():
+            await asyncio.sleep(1.3)
+            await new.send(f"`ltn blog set public` will sync it back to the blog category perms")
+
+        async with new.typing():
+            await asyncio.sleep(0.5)
+        await new.send(f"type `ltn blog` to see all the options")
+
+        async with new.typing():
+            await asyncio.sleep(1)
+        await new.send(f"once done do `ltn cleanup messages 99` to clean the chat")
+
         return await ctx.tick()
+
+    @blog.command(name="share", aliases=["add"])
+    async def share_blog(self, ctx: commands.Context, user: discord.Member):
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [c for c in active if c[1] == ctx.author.id]
+
+        overwrites = ctx.channel.overwrites
+
+        # set shared perms
+        overwrites[user] = overwrites.get(
+            user, discord.PermissionOverwrite())
+        overwrites[user].update(manage_messages=True, send_messages=True)
+
+        for c in active_author:
+            if c[0] == ctx.channel.id:
+                await ctx.channel.edit(overwrites=overwrites)
+
+                return await ctx.tick()
+
+        return
+
+    @blog.command(name="unshare", aliases=["remove"])
+    async def unshare_blog(self, ctx: commands.Context, user: discord.Member):
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [c for c in active if c[1] == ctx.author.id]
+
+        overwrites = ctx.channel.overwrites
+
+        # set shared perms
+        overwrites[user] = overwrites.get(
+            user, discord.PermissionOverwrite())
+        overwrites[user].update(manage_messages=None, send_messages=None)
+
+        for c in active_author:
+            if c[0] == ctx.channel.id:
+                await ctx.channel.edit(overwrites=overwrites)
+
+                return await ctx.tick()
+
+        return
 
     @blog.group(name="set")
     async def settings(self, ctx: commands.Context):
@@ -108,24 +176,26 @@ class Blogs(commands.Cog):
 
         category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
 
-        # sync perms with category
-        overwrites = category.overwrites
+        # sync perms with category # dont think we need to do this
+        # overwrites = category.overwrites
+        overwrites = ctx.channel.overwrites
+
+        shared_perm = discord.Permissions(manage_messages=True)
 
         # disable default perms
+        # logic here is if you can't manage messages, your perms get removed
         for role_user in overwrites:
-            if role_user != ctx.author:
+            # if this user perms is NOT a strict superset (contains) of the shared blog perm (manage messages)
+            if not overwrites[role_user].pair()[0] > shared_perm:
                 overwrites[role_user].update(
                     send_messages=False, add_reactions=False)
 
         # set owner perms
+        # i dont think this is needed though
         overwrites[ctx.author] = overwrites.get(
             ctx.author, discord.PermissionOverwrite())
         overwrites[ctx.author].update(
-            manage_channels=True, manage_messages=True,
-            send_messages=True, read_messages=True,
-            attach_files=True, embed_links=True,
-            external_emojis=True, external_stickers=True,
-            read_message_history=True)
+            manage_channels=True, manage_messages=True, send_messages=True)
 
         for c in active_author:
             if c[0] == ctx.channel.id:
@@ -144,6 +214,17 @@ class Blogs(commands.Cog):
 
         category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
 
+        shared_perm = discord.Permissions(manage_messages=True)
+
+        shared_users = []
+
+        overwrites = ctx.channel.overwrites
+
+        for role_user in overwrites:
+            # if this user perms is a strict superset (contains) of the shared blog perm (manage messages)
+            if overwrites[role_user].pair()[0] > shared_perm:
+                shared_users.append(role_user)
+
         # sync perms with category
         overwrites = category.overwrites
 
@@ -151,11 +232,11 @@ class Blogs(commands.Cog):
         overwrites[ctx.author] = overwrites.get(
             ctx.author, discord.PermissionOverwrite())
         overwrites[ctx.author].update(
-            manage_channels=True, manage_messages=True,
-            send_messages=True, read_messages=True,
-            attach_files=True, embed_links=True,
-            external_emojis=True, external_stickers=True,
-            read_message_history=True)
+            manage_channels=True, manage_messages=True, send_messages=True)
+
+        for u in shared_users:
+            overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
+            overwrites[u].update(manage_messages=True, send_messages=True)
 
         for c in active_author:
             if c[0] == ctx.channel.id:
