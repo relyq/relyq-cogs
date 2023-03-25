@@ -37,15 +37,17 @@ class Blogs(commands.Cog):
             except ValueError:
                 pass
 
+# public commands
+
     @commands.group(name="blog")
     @commands.guild_only()
     @commands.bot_has_permissions(manage_channels=True)
-    async def blogs(self, ctx: commands.Context):
+    async def blog(self, ctx: commands.Context):
         """
         blogs
         """
 
-    @blogs.command(name="create")
+    @blog.command(name="create")
     async def create_blog(self, ctx: commands.Context, name: str):
         """create your blog"""
 
@@ -91,8 +93,13 @@ class Blogs(commands.Cog):
 
         return await ctx.tick()
 
-    @blogs.group(name="set")
-    @set.command(name="private")
+    @blog.group(name="set")
+    async def settings(self, ctx: commands.Context):
+        """
+        settings for your blog
+        """
+
+    @settings.command(name="private")
     async def private_blog(self, ctx: commands.Context):
         """make your blog private so only you can post"""
 
@@ -128,7 +135,7 @@ class Blogs(commands.Cog):
 
         return
 
-    @set.command(name="public")
+    @settings.command(name="public")
     async def public_blog(self, ctx: commands.Context):
         """make your blog public so anyone can post -- syncs perms with category"""
 
@@ -158,14 +165,16 @@ class Blogs(commands.Cog):
 
         return
 
-    @blogs.group(name="settings")
+# mod commands
+
+    @commands.group(name="blogs")
     @commands.admin_or_permissions(administrator=True)
     async def blogsset(self, ctx: commands.Context):
-        """settings for blogs"""
+        """server wide settings for blogs"""
 
     @blogsset.command(name="toggle")
     async def _text_toggle(self, ctx: commands.Context, true_or_false: bool):
-        """toggle whether users can use `[p]blogs create` in this server"""
+        """toggle whether users can use `[p]blog create` in this server"""
         await self.config.guild(ctx.guild).text.toggle.set(true_or_false)
         return await ctx.tick()
 
@@ -183,7 +192,7 @@ class Blogs(commands.Cog):
 
     @blogsset.command(name="roles")
     async def _text_roles(self, ctx: commands.Context, *roles: discord.Role):
-        """set the roles allowed to use `[p]blogs create` - def: @everyone"""
+        """set the roles allowed to use `[p]blog create` - def: @everyone"""
         await self.config.guild(ctx.guild).text.roles.set([r.id for r in roles])
         return await ctx.tick()
 
