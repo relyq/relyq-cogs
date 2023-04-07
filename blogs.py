@@ -129,7 +129,7 @@ class Blogs(commands.Cog):
 
         async with new.typing():
             await asyncio.sleep(1)
-        await new.send(f"but you can rename it and set its description to whatever you want")
+        await new.send(f"but you can rename it and set its description to whatever you want using `ltn blog set name` and `ltn blog set topic`")
 
         async with new.typing():
             await asyncio.sleep(1)
@@ -137,7 +137,7 @@ class Blogs(commands.Cog):
 
         async with new.typing():
             await asyncio.sleep(1.25)
-        await new.send(f"in that case you can choose to share your blog with some ppl using `ltn blog share @relyq`")
+        await new.send(f"in that case you can choose to share your blog with some ppl using `ltn blog share @lantern` so they can post too")
 
         async with new.typing():
             await asyncio.sleep(1)
@@ -214,6 +214,9 @@ class Blogs(commands.Cog):
         active_author = [int(c) for c in active if active[c]
                          ["owner"] == ctx.author.id]
 
+        if user is ctx.guild.me:
+            return
+
         overwrites = ctx.channel.overwrites
 
         async with self.config.guild(ctx.guild).text.active() as a:
@@ -248,6 +251,9 @@ class Blogs(commands.Cog):
         active = await self.config.guild(ctx.guild).text.active()
         active_author = [int(c) for c in active if active[c]
                          ["owner"] == ctx.author.id]
+
+        if user is ctx.guild.me:
+            return
 
         overwrites = ctx.channel.overwrites
 
@@ -836,73 +842,76 @@ class Blogs(commands.Cog):
         active = await self.config.guild(ctx.guild).text.active()
         category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
 
-        for chan in active:
-            c = active[chan]
-            channel = ctx.guild.get_channel(int(chan))
-            owner = ctx.guild.get_member(c["owner"])
+        try:
+            for chan in active:
+                c = active[chan]
+                channel = ctx.guild.get_channel(int(chan))
+                owner = ctx.guild.get_member(c["owner"])
 
-            # must be inside the loop else perms are carried over from last blog
-            overwrites = category.overwrites
+                # must be inside the loop else perms are carried over from last blog
+                overwrites = category.overwrites
 
-            # note these are about to be discord.Member - not ids
-            shared = []
-            blocked = []
+                # note these are about to be discord.Member - not ids
+                shared = []
+                blocked = []
 
-            try:
-                shared = [ctx.guild.get_member(u) for u in c["shared"]]
-            except KeyError:
-                pass
-            try:
-                blocked = [ctx.guild.get_member(u) for u in c["blocked"]]
-            except KeyError:
-                pass
-            try:
-                if c["private"]:
-                    """ per the private command this shouldnt be needed
-                    # disable perms
-                    for role_user in overwrites:
-                        if role_user.id not in shared and role_user.id not in blocked:
-                            overwrites[role_user].update(
-                                view_channel=None, manage_messages=None,
-                                send_messages=False, add_reactions=False)
-                    """
+                try:
+                    shared = [ctx.guild.get_member(u) for u in c["shared"]]
+                except KeyError:
+                    pass
+                try:
+                    blocked = [ctx.guild.get_member(u) for u in c["blocked"]]
+                except KeyError:
+                    pass
+                try:
+                    if c["private"]:
+                        """ per the private command this shouldnt be needed
+                        # disable perms
+                        for role_user in overwrites:
+                            if role_user.id not in shared and role_user.id not in blocked:
+                                overwrites[role_user].update(
+                                    view_channel=None, manage_messages=None,
+                                    send_messages=False, add_reactions=False)
+                        """
 
-                    # disable perms for default role
-                    overwrites[ctx.guild.default_role] = overwrites.get(
-                        ctx.guild.default_role, discord.PermissionOverwrite())
-                    overwrites[ctx.guild.default_role].update(
+                        # disable perms for default role
+                        overwrites[ctx.guild.default_role] = overwrites.get(
+                            ctx.guild.default_role, discord.PermissionOverwrite())
+                        overwrites[ctx.guild.default_role].update(
+                            send_messages=False, add_reactions=False)
+                except KeyError:
+                    pass
+
+                for u in shared:
+                    overwrites[u] = overwrites.get(
+                        u, discord.PermissionOverwrite())
+                    overwrites[u].update(view_channel=True, manage_messages=True,
+                                         send_messages=True, add_reactions=True)
+
+                for u in blocked:
+                    overwrites[u] = overwrites.get(
+                        u, discord.PermissionOverwrite())
+                    overwrites[u].update(
+                        view_channel=None, manage_messages=None,
                         send_messages=False, add_reactions=False)
-            except KeyError:
-                pass
 
-            for u in shared:
-                overwrites[u] = overwrites.get(
-                    u, discord.PermissionOverwrite())
-                overwrites[u].update(view_channel=True, manage_messages=True,
-                                     send_messages=True, add_reactions=True)
+                # set owner perms
+                overwrites[owner] = overwrites.get(
+                    owner, discord.PermissionOverwrite())
+                overwrites[owner].update(
+                    view_channel=True, manage_messages=True,
+                    send_messages=True, add_reactions=True)
 
-            for u in blocked:
-                overwrites[u] = overwrites.get(
-                    u, discord.PermissionOverwrite())
-                overwrites[u].update(
-                    view_channel=None, manage_messages=None,
-                    send_messages=False, add_reactions=False)
+                # set bot perms
+                overwrites[ctx.guild.me] = overwrites.get(
+                    ctx.guild.me, discord.PermissionOverwrite())
+                overwrites[ctx.guild.me].update(
+                    view_channel=True, manage_channels=True, manage_messages=True,
+                    send_messages=True, add_reactions=True)
 
-            # set owner perms
-            overwrites[owner] = overwrites.get(
-                owner, discord.PermissionOverwrite())
-            overwrites[owner].update(
-                view_channel=True, manage_messages=True,
-                send_messages=True, add_reactions=True)
-
-            # set bot perms
-            overwrites[ctx.guild.me] = overwrites.get(
-                ctx.guild.me, discord.PermissionOverwrite())
-            overwrites[ctx.guild.me].update(
-                view_channel=True, manage_channels=True, manage_messages=True,
-                send_messages=True, add_reactions=True)
-
-            await channel.edit(overwrites=overwrites)
-            await asyncio.sleep(0.5)
+                await channel.edit(overwrites=overwrites)
+                await asyncio.sleep(0.5)
+        except discord.HTTPException:
+            return ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
 
         return await ctx.tick()
