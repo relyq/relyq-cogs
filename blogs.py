@@ -51,7 +51,7 @@ class Blogs(commands.Cog):
 
         !!!!!!!!!! BLOG COMMANDS WILL ONLY WORK ON YOUR BLOG !!!!!!!!!!
         """
-    @commands.cooldown(1, 120, commands.BucketType.user)
+    @commands.cooldown(1, 60, commands.BucketType.user)
     @blog.command(name="create", aliases=["new", "make"])
     async def create_blog(self, ctx: commands.Context, name: str):
         """create your blog"""
@@ -712,6 +712,54 @@ class Blogs(commands.Cog):
     async def roles(self, ctx: commands.Context):
         """settings for roles that can use `[p]blog create` - def: @everyone"""
 
+    @ blogsset.command(name="chown", aliases=["changeowner", "changeown", "chowner"])
+    async def change_owner(self, ctx: commands.Context, new_owner: discord.Member):
+        """change owner for current channel"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_new_owner = [int(c) for c in active if active[c]
+                            ["owner"] == new_owner]
+
+        # check if caller is allowed to create blog - channel limits
+        userlimit = await self.config.guild(ctx.guild).text.userlimit()
+
+        if new_owner is ctx.guild.me:
+            return
+        if len(active_new_owner) >= userlimit:
+            return await ctx.send(f"new owner already has a blog")
+
+        overwrites = ctx.channel.overwrites
+
+        async with self.config.guild(ctx.guild).text.active() as a:
+            c = a[str(ctx.channel.id)]
+
+            old_owner = ctx.guild.get_member(c["owner"])
+
+            # pop new owner from shared/blocked
+            try:
+                c["shared"].remove(new_owner.id)
+            except (ValueError, KeyError):
+                pass
+            try:
+                c["blocked"].remove(new_owner.id)
+            except (ValueError, KeyError):
+                pass
+
+            c["owner"] = new_owner.id
+
+            # remove old owner perms
+            overwrites.pop(old_owner, None)
+
+            # set new owner perms
+            overwrites[new_owner] = overwrites.get(
+                new_owner, discord.PermissionOverwrite())
+            overwrites[new_owner].update(
+                view_channel=True, manage_messages=True,
+                send_messages=True, add_reactions=True)
+
+        await ctx.channel.edit(overwrites=overwrites)
+
+        return await ctx.tick()
+
     @ roles.command(name="set")
     async def roles_set(self, ctx: commands.Context, *roles: discord.Role):
         """set the roles - this will overwrite the allow list"""
@@ -911,7 +959,10 @@ class Blogs(commands.Cog):
 
                 await channel.edit(overwrites=overwrites)
                 await asyncio.sleep(0.5)
-        except discord.HTTPException:
-            return ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
+        except discord.Forbidden:
+            return await ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
+        except AttributeError as e:
+            await ctx.send(f"AttributeError exception ignored for channel {channel.mention}")
+            await ctx.send(f"{e}")
 
         return await ctx.tick()
