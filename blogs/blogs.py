@@ -892,8 +892,8 @@ class Blogs(commands.Cog):
 
         ctx.send("starting resync")
 
-        try:
-            for chan in active:
+        for chan in active:
+            try:
                 c = active[chan]
                 channel = ctx.guild.get_channel(int(chan))
                 owner = ctx.guild.get_member(c["owner"])
@@ -961,9 +961,9 @@ class Blogs(commands.Cog):
 
                 await channel.edit(overwrites=overwrites)
                 await asyncio.sleep(0.5)
-        except discord.Forbidden:
-            return await ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
-        except AttributeError as e:
-            await ctx.send(f"AttributeError exception ignored for channel {channel.mention}: {e}\nsome of the blog members might not be in the server")
+            except discord.Forbidden:
+                return await ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
+            except AttributeError as e:
+                await ctx.send(f"AttributeError exception ignored for channel {channel.mention}: {e}\nsome of the blog members might not be in the server")
 
         return await ctx.tick()
