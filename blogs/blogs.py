@@ -51,7 +51,7 @@ class Blogs(commands.Cog):
 
         !!!!!!!!!! BLOG COMMANDS WILL ONLY WORK ON YOUR BLOG !!!!!!!!!!
         """
-    @commands.cooldown(1, 60, commands.BucketType.user)
+    @commands.cooldown(1, 30, commands.BucketType.user)
     @blog.command(name="create", aliases=["new", "make"])
     async def create_blog(self, ctx: commands.Context, name: str):
         """create your blog"""
