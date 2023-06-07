@@ -17,7 +17,8 @@ class Blogs(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(
-            self, identifier=13452753, force_registration=True)
+            self, identifier=13452753, force_registration=True
+        )
         default_guild = {
             "text": {
                 "category": None,
@@ -27,7 +28,7 @@ class Blogs(commands.Cog):
                 "userlimit": 1,
                 "active": {},
                 "role_req_msg": "you dont have the required roles to create a blog",
-                "toggle": False
+                "toggle": False,
             }
         }
         self.config.register_guild(**default_guild)
@@ -40,7 +41,7 @@ class Blogs(commands.Cog):
             except KeyError:
                 pass
 
-# public commands
+    # public commands
     @commands.cooldown(1, 2, commands.BucketType.user)
     @commands.group(name="blog", aliases=["blogs"])
     @commands.guild_only()
@@ -51,6 +52,7 @@ class Blogs(commands.Cog):
 
         !!!!!!!!!! BLOG COMMANDS WILL ONLY WORK ON YOUR BLOG !!!!!!!!!!
         """
+
     @commands.cooldown(1, 30, commands.BucketType.user)
     @blog.command(name="create", aliases=["new", "make"])
     async def create_blog(self, ctx: commands.Context, name: str):
@@ -65,12 +67,13 @@ class Blogs(commands.Cog):
         # check caller roles
         role_req = await self.config.guild(ctx.guild).text.roles()
         if role_req and not bool(set(role_req) & set([r.id for r in ctx.author.roles])):
-            return await ctx.send(await self.config.guild(ctx.guild).text.role_req_msg())
+            return await ctx.send(
+                await self.config.guild(ctx.guild).text.role_req_msg()
+            )
 
         # retrieve number of active channels, authors, and maximum channels
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
         maximum = await self.config.guild(ctx.guild).text.maximum()
 
         # check if caller is allowed to create blog - channel limits
@@ -81,22 +84,32 @@ class Blogs(commands.Cog):
             return await ctx.send(f"you already have a blog")
 
         # get category overwrites - aka permissions
-        category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
+        category = self.bot.get_channel(
+            await self.config.guild(ctx.guild).text.category()
+        )
         overwrites = category.overwrites
 
         # set owner perms
         overwrites[ctx.author] = overwrites.get(
-            ctx.author, discord.PermissionOverwrite())
+            ctx.author, discord.PermissionOverwrite()
+        )
         overwrites[ctx.author].update(
-            view_channel=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            view_channel=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
         # set bot perms
         overwrites[ctx.guild.me] = overwrites.get(
-            ctx.guild.me, discord.PermissionOverwrite())
+            ctx.guild.me, discord.PermissionOverwrite()
+        )
         overwrites[ctx.guild.me].update(
-            manage_channels=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            manage_channels=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
         # create channel
         new = await ctx.guild.create_text_channel(name=name, category=category)
@@ -104,22 +117,24 @@ class Blogs(commands.Cog):
         await new.edit(overwrites=overwrites)
 
         async with self.config.guild(ctx.guild).text.active() as a:
-            a[new.id] = {
-                "owner": ctx.author.id,
-                "created": time.time()
-            }
+            a[new.id] = {"owner": ctx.author.id, "created": time.time()}
 
-        log_channel = ctx.guild.get_channel(await self.config.guild(ctx.guild).text.log_channel())
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
 
         if log_channel:
-            await log_channel.send(embed=discord.Embed(
-                title=f"blog created {new.name}",
-                color=await ctx.embed_color(),
-                timestamp=datetime.datetime.utcnow(),
-                description=f"""
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog created {new.name}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
                   {new.mention} created by {ctx.author.mention}
-                """
-            ), allowed_mentions=discord.AllowedMentions.none())
+                """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
         await new.send(f"{ctx.author.mention} welcome to your new blog!!")
 
@@ -129,19 +144,27 @@ class Blogs(commands.Cog):
 
         async with new.typing():
             await asyncio.sleep(1)
-        await new.send(f"but you can rename it and set its description to whatever you want using `ltn blog set name` and `ltn blog set topic`")
+        await new.send(
+            f"but you can rename it and set its description to whatever you want using `ltn blog set name` and `ltn blog set topic`"
+        )
 
         async with new.typing():
             await asyncio.sleep(1)
-        await new.send(f"you can also set it to private with `ltn blog set private` so only you can post")
+        await new.send(
+            f"you can also set it to private with `ltn blog set private` so only you can post"
+        )
 
         async with new.typing():
             await asyncio.sleep(1.25)
-        await new.send(f"in that case you can choose to share your blog with some ppl using `ltn blog share @lantern` so they can post too")
+        await new.send(
+            f"in that case you can choose to share your blog with some ppl using `ltn blog share @lantern` so they can post too"
+        )
 
         async with new.typing():
             await asyncio.sleep(1)
-            await new.send(f"`ltn blog set public` will sync it back to the blog category perms")
+            await new.send(
+                f"`ltn blog set public` will sync it back to the blog category perms"
+            )
 
         async with new.typing():
             await asyncio.sleep(0.5)
@@ -153,13 +176,15 @@ class Blogs(commands.Cog):
 
         return await ctx.tick()
 
-    @ staticmethod
+    @staticmethod
     async def check_blog_delete(ctx: commands.Context) -> bool:
         """
         blog delete confirmation
         """
         await ctx.send("are you sure you want to delete your blog?? (yes/no)")
-        response = await ctx.bot.wait_for("message", check=MessagePredicate.same_context(ctx))
+        response = await ctx.bot.wait_for(
+            "message", check=MessagePredicate.same_context(ctx)
+        )
 
         if response.content.lower().startswith("y"):
             return True
@@ -167,52 +192,57 @@ class Blogs(commands.Cog):
             await ctx.send(("okay cool we keeping it"))
             return False
 
-    @ commands.cooldown(1, 30, commands.BucketType.user)
-    @ blog.command(name="delete", aliases=["nuke", "destroy"])
+    @commands.cooldown(1, 30, commands.BucketType.user)
+    @blog.command(name="delete", aliases=["nuke", "destroy"])
     async def delete_blog(self, ctx: commands.Context):
         """make ur blog be gone (u can still create a new one)"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         cont = await self.check_blog_delete(ctx)
 
         if not cont:
             return
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.tick()
+        await ctx.tick()
 
-                log_channel = ctx.guild.get_channel(await self.config.guild(ctx.guild).text.log_channel())
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
 
-                if log_channel:
-                    await log_channel.send(embed=discord.Embed(
-                        title=f"blog deleted {ctx.channel.name}",
-                        color=await ctx.embed_color(),
-                        timestamp=datetime.datetime.utcnow(),
-                        description=f"""
-                  {ctx.channel.name} deleted by {ctx.author.mention}
-                """
-                    ), allowed_mentions=discord.AllowedMentions.none())
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog deleted {ctx.channel.name}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          {ctx.channel.name} deleted by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
-                async with ctx.channel.typing():
-                    await asyncio.sleep(0.5)
-                await ctx.send(f"okay bye")
+        async with ctx.channel.typing():
+            await asyncio.sleep(0.5)
+        await ctx.send(f"okay bye")
 
-                async with ctx.channel.typing():
-                    await asyncio.sleep(2)
-                return await ctx.channel.delete()
+        async with ctx.channel.typing():
+            await asyncio.sleep(2)
+        return await ctx.channel.delete()
 
-        return
-
-    @ commands.cooldown(1, 5, commands.BucketType.user)
-    @ blog.command(name="share")
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="share")
     async def share_blog(self, ctx: commands.Context, user: discord.Member):
         """share your blog with ur frens"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         if user is ctx.guild.me:
             return
@@ -226,31 +256,32 @@ class Blogs(commands.Cog):
             if user.id not in c["shared"]:
                 c["shared"].append(user.id)
             # set shared perms
-            overwrites[user] = overwrites.get(
-                user, discord.PermissionOverwrite())
-            overwrites[user].update(view_channel=True, manage_messages=True,
-                                    send_messages=True, add_reactions=True)
+            overwrites[user] = overwrites.get(user, discord.PermissionOverwrite())
+            overwrites[user].update(
+                view_channel=True,
+                manage_messages=True,
+                send_messages=True,
+                add_reactions=True,
+            )
             if "blocked" in c:
                 try:
                     c["blocked"].remove(user.id)
                 except ValueError:
                     pass
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 5, commands.BucketType.user)
-    @ blog.command(name="block")
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="block")
     async def block_blog(self, ctx: commands.Context, user: discord.Member):
         """block ur enemies from ur blog"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         if user is ctx.guild.me:
             return
@@ -264,32 +295,32 @@ class Blogs(commands.Cog):
             if user.id not in c["blocked"]:
                 c["blocked"].append(user.id)
             # set blocked perms
-            overwrites[user] = overwrites.get(
-                user, discord.PermissionOverwrite())
+            overwrites[user] = overwrites.get(user, discord.PermissionOverwrite())
             overwrites[user].update(
-                view_channel=None, manage_messages=None,
-                send_messages=False, add_reactions=False)
+                view_channel=None,
+                manage_messages=None,
+                send_messages=False,
+                add_reactions=False,
+            )
             if "shared" in c:
                 try:
                     c["shared"].remove(user.id)
                 except ValueError:
                     pass
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 5, commands.BucketType.user)
-    @ blog.command(name="unshare")
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="unshare")
     async def unshare_blog(self, ctx: commands.Context, user: discord.Member):
         """unshare them when u no longer frens"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         overwrites = ctx.channel.overwrites
 
@@ -303,21 +334,19 @@ class Blogs(commands.Cog):
                 except ValueError:
                     pass
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 5, commands.BucketType.user)
-    @ blog.command(name="unblock")
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="unblock")
     async def unblock_blog(self, ctx: commands.Context, user: discord.Member):
         """unblock when u no longer enemies"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         overwrites = ctx.channel.overwrites
 
@@ -331,21 +360,19 @@ class Blogs(commands.Cog):
                 except ValueError:
                     pass
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 300, commands.BucketType.user)
-    @ blog.command(name="rename")
+    @commands.cooldown(1, 300, commands.BucketType.user)
+    @blog.command(name="rename")
     async def rename_blog(self, ctx: commands.Context, *, new_name: str):
         """rename ur blog"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         # empty string should return command help anyway
         if not new_name:
@@ -361,40 +388,42 @@ class Blogs(commands.Cog):
             return
         """
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
 
-                log_channel = ctx.guild.get_channel(await self.config.guild(ctx.guild).text.log_channel())
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog renamed {ctx.channel.mention}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
-                if log_channel:
-                    await log_channel.send(embed=discord.Embed(
-                        title=f"blog renamed {ctx.channel.mention}",
-                        color=await ctx.embed_color(),
-                        timestamp=datetime.datetime.utcnow(),
-                        description=f"""
-                  {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
-                """
-                    ), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.channel.edit(name=new_name)
 
-                await ctx.channel.edit(name=new_name)
+        return await ctx.tick()
 
-                return await ctx.tick()
-
-        return
-
-    @ blog.group(name="set", aliases=["settings", "s"])
+    @blog.group(name="set", aliases=["settings", "s"])
     async def settings(self, ctx: commands.Context):
         """
         settings for your blog
         """
 
-    @ commands.cooldown(1, 300, commands.BucketType.user)
-    @ settings.command(name="name", aliases=["title", "n"])
+    @commands.cooldown(1, 300, commands.BucketType.user)
+    @settings.command(name="name", aliases=["title", "n"])
     async def blog_name(self, ctx: commands.Context, *, new_name: str):
         """rename ur blog"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         # empty string should return command help anyway
         if not new_name:
@@ -410,120 +439,120 @@ class Blogs(commands.Cog):
             return
         """
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
 
-                log_channel = ctx.guild.get_channel(await self.config.guild(ctx.guild).text.log_channel())
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog renamed {ctx.channel.mention}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
-                if log_channel:
-                    await log_channel.send(embed=discord.Embed(
-                        title=f"blog renamed {ctx.channel.mention}",
-                        color=await ctx.embed_color(),
-                        timestamp=datetime.datetime.utcnow(),
-                        description=f"""
-                  {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
-                """
-                    ), allowed_mentions=discord.AllowedMentions.none())
+        await ctx.channel.edit(name=new_name)
 
-                await ctx.channel.edit(name=new_name)
+        return await ctx.tick()
 
-                return await ctx.tick()
-
-        return
-
-    @ commands.cooldown(1, 60, commands.BucketType.user)
-    @ settings.command(name="topic", aliases=["description", "desc", "d"])
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @settings.command(name="topic", aliases=["description", "desc", "d"])
     async def blog_topic(self, ctx: commands.Context, *, new_topic: str):
         """set your blogs topic"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         if len(new_topic) > 1024:
             await ctx.send("this topic is too long!! - max 1024 characters")
             return
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                log_channel = ctx.guild.get_channel(await self.config.guild(ctx.guild).text.log_channel())
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
 
-                if log_channel:
-                    await log_channel.send(embed=discord.Embed(
-                        title=f"blog topic update {ctx.channel.mention}",
-                        color=await ctx.embed_color(),
-                        timestamp=datetime.datetime.utcnow(),
-                        description=f"""
-                  topic "{ctx.channel.topic or ""}" changed to {new_topic or ""} by {ctx.author.mention}
-                """
-                    ), allowed_mentions=discord.AllowedMentions.none())
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog topic update {ctx.channel.mention}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          topic "{ctx.channel.topic or ""}" changed to {new_topic or ""} by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
-                await ctx.channel.edit(topic=new_topic)
+        await ctx.channel.edit(topic=new_topic)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 60, commands.BucketType.user)
-    @ settings.command(name="nsfw")
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @settings.command(name="nsfw")
     async def nsfw(self, ctx: commands.Context):
         """mark your blog as nsfw"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(nsfw=True)
+        if ctx.channel.id not in active_author:
+            return
 
-                return await ctx.tick()
+        await ctx.channel.edit(nsfw=True)
 
-        return
+        return await ctx.tick()
 
-    @ commands.cooldown(1, 60, commands.BucketType.user)
-    @ settings.command(name="sfw")
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @settings.command(name="sfw")
     async def sfw(self, ctx: commands.Context):
         """mark your blog as sfw"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(nsfw=False)
+        if ctx.channel.id not in active_author:
+            return
 
-                return await ctx.tick()
+        await ctx.channel.edit(nsfw=False)
 
-        return
+        return await ctx.tick()
 
-    @ commands.cooldown(1, 2, commands.BucketType.user)
-    @ settings.command(name="slow", aliases=["slowmode", "sm"])
+    @commands.cooldown(1, 2, commands.BucketType.user)
+    @settings.command(name="slow", aliases=["slowmode", "sm"])
     async def slowmode(self, ctx: commands.Context, seconds: int):
         """set slowmode for your blog - max 6 hrs - 0 to disable"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         if seconds < 0 or seconds > 21600:
             await ctx.send(
-                "the slowmode cant be set to over 6 hrs or less than 0 seconds")
+                "the slowmode cant be set to over 6 hrs or less than 0 seconds"
+            )
             return
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(slowmode_delay=seconds)
+        await ctx.channel.edit(slowmode_delay=seconds)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 60, commands.BucketType.user)
-    @ settings.command(name="private", aliases=["priv"])
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @settings.command(name="private", aliases=["priv"])
     async def private_blog(self, ctx: commands.Context):
         """make your blog private so only you can post"""
 
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
 
         # privating a blog will always result in more private perms than the category
         # therefore i dont need to sync with category
@@ -553,43 +582,54 @@ class Blogs(commands.Cog):
 
             # disable perms for default role
             overwrites[ctx.guild.default_role] = overwrites.get(
-                ctx.guild.default_role, discord.PermissionOverwrite())
+                ctx.guild.default_role, discord.PermissionOverwrite()
+            )
             overwrites[ctx.guild.default_role].update(
-                send_messages=False, add_reactions=False)
+                send_messages=False, add_reactions=False
+            )
 
         # set owner perms
         # i dont think this is needed though as they have the shared_perm
         overwrites[ctx.author] = overwrites.get(
-            ctx.author, discord.PermissionOverwrite())
+            ctx.author, discord.PermissionOverwrite()
+        )
         overwrites[ctx.author].update(
-            view_channel=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            view_channel=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
         # set bot perms
         overwrites[ctx.guild.me] = overwrites.get(
-            ctx.guild.me, discord.PermissionOverwrite())
+            ctx.guild.me, discord.PermissionOverwrite()
+        )
         overwrites[ctx.guild.me].update(
-            view_channel=True, manage_channels=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            view_channel=True,
+            manage_channels=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.cooldown(1, 60, commands.BucketType.user)
-    @ settings.command(name="public", aliases=["pub"])
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @settings.command(name="public", aliases=["pub"])
     async def public_blog(self, ctx: commands.Context):
         """make your blog public so anyone can post"""
 
         active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]
-                         ["owner"] == ctx.author.id]
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
 
-        category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
+        if ctx.channel.id not in active_author:
+            return
+
+        category = self.bot.get_channel(
+            await self.config.guild(ctx.guild).text.category()
+        )
 
         # sync perms with category
         overwrites = category.overwrites
@@ -604,47 +644,57 @@ class Blogs(commands.Cog):
                 shared = c["shared"]
                 for u in shared:
                     u = ctx.guild.get_member(u)
-                    overwrites[u] = overwrites.get(
-                        u, discord.PermissionOverwrite())
-                    overwrites[u].update(view_channel=True, manage_messages=True,
-                                         send_messages=True, add_reactions=True)
+                    overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
+                    overwrites[u].update(
+                        view_channel=True,
+                        manage_messages=True,
+                        send_messages=True,
+                        add_reactions=True,
+                    )
             if "blocked" in c:
                 blocked = c["blocked"]
                 for u in blocked:
                     u = ctx.guild.get_member(u)
-                    overwrites[u] = overwrites.get(
-                        u, discord.PermissionOverwrite())
+                    overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
                     overwrites[u].update(
-                        view_channel=None, manage_messages=None,
-                        send_messages=False, add_reactions=False)
+                        view_channel=None,
+                        manage_messages=None,
+                        send_messages=False,
+                        add_reactions=False,
+                    )
 
             c["private"] = False
 
         # set owner perms
         overwrites[ctx.author] = overwrites.get(
-            ctx.author, discord.PermissionOverwrite())
+            ctx.author, discord.PermissionOverwrite()
+        )
         overwrites[ctx.author].update(
-            view_channel=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            view_channel=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
         # set bot perms
         overwrites[ctx.guild.me] = overwrites.get(
-            ctx.guild.me, discord.PermissionOverwrite())
+            ctx.guild.me, discord.PermissionOverwrite()
+        )
         overwrites[ctx.guild.me].update(
-            view_channel=True, manage_channels=True, manage_messages=True,
-            send_messages=True, add_reactions=True)
+            view_channel=True,
+            manage_channels=True,
+            manage_messages=True,
+            send_messages=True,
+            add_reactions=True,
+        )
 
-        for c in active_author:
-            if int(c) == ctx.channel.id:
-                await ctx.channel.edit(overwrites=overwrites)
+        await ctx.channel.edit(overwrites=overwrites)
 
-                return await ctx.tick()
+        return await ctx.tick()
 
-        return
-
-    @ commands.bot_has_permissions(embed_links=True)
-    @ commands.cooldown(1, 10, commands.BucketType.user)
-    @ settings.command(name="view", aliases=["v"])
+    @commands.bot_has_permissions(embed_links=True)
+    @commands.cooldown(1, 10, commands.BucketType.user)
+    @settings.command(name="view", aliases=["v"])
     async def view_blog_settings(self, ctx: commands.Context):
         """view your blog's settings"""
         active = await self.config.guild(ctx.guild).text.active()
@@ -668,10 +718,11 @@ class Blogs(commands.Cog):
         except KeyError:
             pass
 
-        return await ctx.send(embed=discord.Embed(
-            title="blog settings",
-            color=await ctx.embed_color(),
-            description=f"""
+        return await ctx.send(
+            embed=discord.Embed(
+                title="blog settings",
+                color=await ctx.embed_color(),
+                description=f"""
               **name:** {ctx.channel.name}
               **topic:** {ctx.channel.topic}
               **private:** {"enabled" if private else "disabled"}
@@ -680,44 +731,46 @@ class Blogs(commands.Cog):
               **shared users:** {humanize_list(shared) or None}
               **blocked users:** {humanize_list(blocked) or None}
               **created**: {time.ctime(settings["created"])}
-            """
-        ))
+            """,
+            )
+        )
 
-# mod commands
+    # mod commands
 
-    @ commands.group(name="blogset", aliases=["blogsettings", "blogssettings", "bs"])
-    @ commands.admin_or_permissions(administrator=True)
+    @commands.group(name="blogset", aliases=["blogsettings", "blogssettings", "bs"])
+    @commands.admin_or_permissions(administrator=True)
     async def blogsset(self, ctx: commands.Context):
         """server wide settings for blogs"""
 
-    @ blogsset.command(name="toggle")
+    @blogsset.command(name="toggle")
     async def _text_toggle(self, ctx: commands.Context, true_or_false: bool):
         """toggle whether users can use `[p]blog create` in this server"""
         await self.config.guild(ctx.guild).text.toggle.set(true_or_false)
         return await ctx.tick()
 
-    @ blogsset.command(name="category")
-    async def _text_category(self, ctx: commands.Context, category: discord.CategoryChannel):
+    @blogsset.command(name="category")
+    async def _text_category(
+        self, ctx: commands.Context, category: discord.CategoryChannel
+    ):
         """set the text channel category for blogs - def: none"""
         await self.config.guild(ctx.guild).text.category.set(category.id)
         return await ctx.tick()
 
-    @ blogsset.command(name="maxchannels")
+    @blogsset.command(name="maxchannels")
     async def _text_maxchannels(self, ctx: commands.Context, maximum: int):
         """set the maximum amount of total blog channels that can be created - def: 10"""
         await self.config.guild(ctx.guild).text.maximum.set(maximum)
         return await ctx.tick()
 
-    @ blogsset.group(name="roles")
+    @blogsset.group(name="roles")
     async def roles(self, ctx: commands.Context):
         """settings for roles that can use `[p]blog create` - def: @everyone"""
 
-    @ blogsset.command(name="chown", aliases=["changeowner", "changeown", "chowner"])
+    @blogsset.command(name="chown", aliases=["changeowner", "changeown", "chowner"])
     async def change_owner(self, ctx: commands.Context, new_owner: discord.Member):
         """change owner for current channel"""
         active = await self.config.guild(ctx.guild).text.active()
-        active_new_owner = [int(c) for c in active if active[c]
-                            ["owner"] == new_owner]
+        active_new_owner = [int(c) for c in active if active[c]["owner"] == new_owner]
 
         # check if caller is allowed to create blog - channel limits
         userlimit = await self.config.guild(ctx.guild).text.userlimit()
@@ -751,22 +804,26 @@ class Blogs(commands.Cog):
 
             # set new owner perms
             overwrites[new_owner] = overwrites.get(
-                new_owner, discord.PermissionOverwrite())
+                new_owner, discord.PermissionOverwrite()
+            )
             overwrites[new_owner].update(
-                view_channel=True, manage_messages=True,
-                send_messages=True, add_reactions=True)
+                view_channel=True,
+                manage_messages=True,
+                send_messages=True,
+                add_reactions=True,
+            )
 
         await ctx.channel.edit(overwrites=overwrites)
 
         return await ctx.tick()
 
-    @ roles.command(name="set")
+    @roles.command(name="set")
     async def roles_set(self, ctx: commands.Context, *roles: discord.Role):
         """set the roles - this will overwrite the allow list"""
         await self.config.guild(ctx.guild).text.roles.set([r.id for r in roles])
         return await ctx.tick()
 
-    @ roles.command(name="add")
+    @roles.command(name="add")
     async def roles_add(self, ctx: commands.Context, *roles: discord.Role):
         """add a role allowed to the list"""
         set_roles = await self.config.guild(ctx.guild).text.roles()
@@ -778,7 +835,7 @@ class Blogs(commands.Cog):
         await self.config.guild(ctx.guild).text.roles.set(set_roles)
         return await ctx.tick()
 
-    @ roles.command(name="remove")
+    @roles.command(name="remove")
     async def roles_remove(self, ctx: commands.Context, *roles: discord.Role):
         """add a role allowed to the list"""
         set_roles = await self.config.guild(ctx.guild).text.roles()
@@ -790,26 +847,28 @@ class Blogs(commands.Cog):
         await self.config.guild(ctx.guild).text.roles.set(set_roles)
         return await ctx.tick()
 
-    @ blogsset.command(name="userlimit")
+    @blogsset.command(name="userlimit")
     async def _text_userlimit(self, ctx: commands.Context, limit: int):
         """set the maximum amount of blogs users can create - def: 1"""
         await self.config.guild(ctx.guild).text.userlimit.set(limit)
         return await ctx.tick()
 
-    @ blogsset.command(name="rolereqmsg")
+    @blogsset.command(name="rolereqmsg")
     async def _text_rolereqmsg(self, ctx: commands.Context, *, message: str):
-        """set the message displayed when a user does not have any of the required roles - def: 'you dont have the required roles to create a blog' """
+        """set the message displayed when a user does not have any of the required roles - def: 'you dont have the required roles to create a blog'"""
         await self.config.guild(ctx.guild).text.role_req_msg.set(message)
         return await ctx.tick()
 
-    @ blogsset.command(name="log")
-    async def set_log_channel(self, ctx: commands.Context, log_channel: discord.TextChannel):
+    @blogsset.command(name="log")
+    async def set_log_channel(
+        self, ctx: commands.Context, log_channel: discord.TextChannel
+    ):
         """set channel to send name & topic changes to"""
         await self.config.guild(ctx.guild).text.log_channel.set(log_channel.id)
         return await ctx.tick()
 
-    @ commands.bot_has_permissions(embed_links=True)
-    @ blogsset.command(name="view", aliases=["v"])
+    @commands.bot_has_permissions(embed_links=True)
+    @blogsset.command(name="view", aliases=["v"])
     async def view_settings(self, ctx: commands.Context):
         """view the current blogs settings"""
         settings = await self.config.guild(ctx.guild).text()
@@ -819,10 +878,11 @@ class Blogs(commands.Cog):
             if r := ctx.guild.get_role(role):
                 roles.append(r.name)
 
-        return await ctx.send(embed=discord.Embed(
-            title="blogs settings",
-            color=await ctx.embed_color(),
-            description=f"""
+        return await ctx.send(
+            embed=discord.Embed(
+                title="blogs settings",
+                color=await ctx.embed_color(),
+                description=f"""
             **toggle:** {settings["toggle"]}
             **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
@@ -831,13 +891,16 @@ class Blogs(commands.Cog):
             **user limit:** {settings["userlimit"]} channels
             **active:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
             **role req msg**: {settings["role_req_msg"]}
-            """
-        ))
+            """,
+            )
+        )
 
-    @ commands.bot_has_permissions(embed_links=True)
-    @ commands.cooldown(1, 10, commands.BucketType.user)
-    @ blogsset.command(name="blogview", aliases=["blogv", "bview", "bv"])
-    async def view_settings_blog(self, ctx: commands.Context, blog: discord.TextChannel):
+    @commands.bot_has_permissions(embed_links=True)
+    @commands.cooldown(1, 10, commands.BucketType.user)
+    @blogsset.command(name="blogview", aliases=["blogv", "bview", "bv"])
+    async def view_settings_blog(
+        self, ctx: commands.Context, blog: discord.TextChannel
+    ):
         """view settings for a blog"""
         active = await self.config.guild(ctx.guild).text.active()
 
@@ -860,10 +923,11 @@ class Blogs(commands.Cog):
         except KeyError:
             pass
 
-        return await ctx.send(embed=discord.Embed(
-            title=f"blog settings for {blog.mention}",
-            color=await ctx.embed_color(),
-            description=f"""
+        return await ctx.send(
+            embed=discord.Embed(
+                title=f"blog settings for {blog.mention}",
+                color=await ctx.embed_color(),
+                description=f"""
               **name:** {blog.name}
               **topic:** {blog.topic}
               **owner:** {ctx.guild.get_member(settings["owner"])}
@@ -873,22 +937,25 @@ class Blogs(commands.Cog):
               **shared users:** {humanize_list(shared) or None}
               **blocked users:** {humanize_list(blocked) or None}
               **created**: {time.ctime(settings["created"])}
-            """
-        ))
+            """,
+            )
+        )
 
-    @ blogsset.command(name="clear")
+    @blogsset.command(name="clear")
     async def _text_clear(self, ctx: commands.Context):
         """clear & reset the current blogs settings."""
         await self.config.guild(ctx.guild).text.clear()
         return await ctx.tick()
 
-    @ commands.cooldown(1, 60, commands.BucketType.guild)
-    @ blogsset.command(name="resync")
+    @commands.cooldown(1, 60, commands.BucketType.guild)
+    @blogsset.command(name="resync")
     async def resync_blogs(self, ctx: commands.Context):
         """resync perms with category and with the bots internals - if this means changing perms for an admin role then the bot must be admin too"""
 
         active = await self.config.guild(ctx.guild).text.active()
-        category = self.bot.get_channel(await self.config.guild(ctx.guild).text.category())
+        category = self.bot.get_channel(
+            await self.config.guild(ctx.guild).text.category()
+        )
 
         ctx.send("starting resync")
 
@@ -915,7 +982,7 @@ class Blogs(commands.Cog):
                     pass
                 try:
                     if c["private"]:
-                        """ per the private command this shouldnt be needed
+                        """per the private command this shouldnt be needed
                         # disable perms
                         for role_user in overwrites:
                             if role_user.id not in shared and role_user.id not in blocked:
@@ -926,44 +993,62 @@ class Blogs(commands.Cog):
 
                         # disable perms for default role
                         overwrites[ctx.guild.default_role] = overwrites.get(
-                            ctx.guild.default_role, discord.PermissionOverwrite())
+                            ctx.guild.default_role, discord.PermissionOverwrite()
+                        )
                         overwrites[ctx.guild.default_role].update(
-                            send_messages=False, add_reactions=False)
+                            send_messages=False, add_reactions=False
+                        )
                 except KeyError:
                     pass
 
                 for u in shared:
-                    overwrites[u] = overwrites.get(
-                        u, discord.PermissionOverwrite())
-                    overwrites[u].update(view_channel=True, manage_messages=True,
-                                         send_messages=True, add_reactions=True)
+                    overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
+                    overwrites[u].update(
+                        view_channel=True,
+                        manage_messages=True,
+                        send_messages=True,
+                        add_reactions=True,
+                    )
 
                 for u in blocked:
-                    overwrites[u] = overwrites.get(
-                        u, discord.PermissionOverwrite())
+                    overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
                     overwrites[u].update(
-                        view_channel=None, manage_messages=None,
-                        send_messages=False, add_reactions=False)
+                        view_channel=None,
+                        manage_messages=None,
+                        send_messages=False,
+                        add_reactions=False,
+                    )
 
                 # set owner perms
-                overwrites[owner] = overwrites.get(
-                    owner, discord.PermissionOverwrite())
+                overwrites[owner] = overwrites.get(owner, discord.PermissionOverwrite())
                 overwrites[owner].update(
-                    view_channel=True, manage_messages=True,
-                    send_messages=True, add_reactions=True)
+                    view_channel=True,
+                    manage_messages=True,
+                    send_messages=True,
+                    add_reactions=True,
+                )
 
                 # set bot perms
                 overwrites[ctx.guild.me] = overwrites.get(
-                    ctx.guild.me, discord.PermissionOverwrite())
+                    ctx.guild.me, discord.PermissionOverwrite()
+                )
                 overwrites[ctx.guild.me].update(
-                    view_channel=True, manage_channels=True, manage_messages=True,
-                    send_messages=True, add_reactions=True)
+                    view_channel=True,
+                    manage_channels=True,
+                    manage_messages=True,
+                    send_messages=True,
+                    add_reactions=True,
+                )
 
                 await channel.edit(overwrites=overwrites)
                 await asyncio.sleep(0.5)
             except discord.Forbidden:
-                return await ctx.send("couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs.")
+                return await ctx.send(
+                    "couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs."
+                )
             except AttributeError as e:
-                await ctx.send(f"AttributeError exception ignored for channel {channel.mention}: {e}\nsome of the blog members might not be in the server")
+                await ctx.send(
+                    f"AttributeError exception ignored for channel {channel.mention}: {e}\nsome of the blog members might not be in the server"
+                )
 
         return await ctx.tick()
