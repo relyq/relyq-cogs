@@ -181,9 +181,9 @@ class Blogs(commands.Cog):
     @staticmethod
     async def check_blog_delete(ctx: commands.Context) -> bool:
         """
-        blog delete confirmation
+        delete confirmation
         """
-        await ctx.send("are you sure you want to delete your blog?? (yes/no)")
+        await ctx.send("are you sure you want to delete this forever?? (yes/no)")
         response = await ctx.bot.wait_for(
             "message", check=MessagePredicate.same_context(ctx)
         )
@@ -366,7 +366,7 @@ class Blogs(commands.Cog):
 
         return await ctx.tick()
 
-    @commands.cooldown(1, 300, commands.BucketType.user)
+    @commands.cooldown(1, 60, commands.BucketType.user)
     @blog.command(name="rename")
     async def rename_blog(self, ctx: commands.Context, *, new_name: str):
         """rename ur blog"""
@@ -417,7 +417,7 @@ class Blogs(commands.Cog):
         settings for your blog
         """
 
-    @commands.cooldown(1, 300, commands.BucketType.user)
+    @commands.cooldown(1, 60, commands.BucketType.user)
     @settings.command(name="name", aliases=["title", "n"])
     async def blog_name(self, ctx: commands.Context, *, new_name: str):
         """rename ur blog"""
@@ -744,6 +744,7 @@ class Blogs(commands.Cog):
     async def threads(self, ctx: commands.Context):
         """threads on ur blog"""
 
+    @commands.cooldown(1, 30, commands.BucketType.user)
     @threads.command(name="create", aliases=["new"])
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         active = await self.config.guild(ctx.guild).text.active()
@@ -792,6 +793,104 @@ class Blogs(commands.Cog):
                 ),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
+
+        return await ctx.tick()
+
+    @commands.cooldown(1, 30, commands.BucketType.user)
+    @threads.command(name="delete", aliases=["nuke", "destroy"])
+    async def delete_thread(self, ctx: commands.Context):
+        """delete a thread"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.parent_id not in active_author:
+            return
+
+        cont = await self.check_blog_delete(ctx)
+
+        if not cont:
+            return
+
+        await ctx.tick()
+
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
+
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"thread deleted {ctx.channel.name}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          {ctx.channel.name} deleted by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
+        async with ctx.channel.typing():
+            await asyncio.sleep(0.5)
+        await ctx.send(f"okay bye")
+
+        async with ctx.channel.typing():
+            await asyncio.sleep(2)
+        return await ctx.channel.delete()
+
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    @threads.command(name="rename")
+    async def rename_thread(self, ctx: commands.Context, new_name: str):
+        """rename thread"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.parent_id not in active_author:
+            return
+
+        # empty string should return command help anyway
+        if not new_name:
+            await ctx.send("your thread name cant be empty dummy")
+            return
+
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
+
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"thread renamed {ctx.channel.mention}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+          {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
+        """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
+        await ctx.channel.edit(name=new_name)
+
+        return await ctx.tick()
+
+    @commands.cooldown(1, 2, commands.BucketType.user)
+    @threads.command(name="slow", aliases=["slowmode", "sm"])
+    async def thread_slowmode(self, ctx: commands.Context, seconds: int):
+        """set thread slowmode"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.parent_id not in active_author:
+            return
+
+        if seconds < 0 or seconds > 21600:
+            await ctx.send(
+                "the slowmode cant be set to over 6 hrs or less than 0 seconds"
+            )
+            return
+
+        await ctx.channel.edit(slowmode_delay=seconds)
 
         return await ctx.tick()
 
@@ -917,6 +1016,12 @@ class Blogs(commands.Cog):
     async def max_threads(self, ctx: commands.Context, max_threads: int):
         """set the maximum number of threads users can create on their blog - def: 0"""
         await self.config.guild(ctx.guild).text.max_threads.set(max_threads)
+        return await ctx.tick()
+
+    @blogsset.command(name="thread_duration")
+    async def thread_duration(self, ctx: commands.Context, thread_duration: int):
+        """set the time in minutes before a thread is archived. can be any of 60 (hour), 1440 (day), 4320 (3 days), 10000 (week) - def: 4320"""
+        await self.config.guild(ctx.guild).text.thread_duration.set(thread_duration)
         return await ctx.tick()
 
     @blogsset.command(name="rolereqmsg")
