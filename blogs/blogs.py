@@ -26,6 +26,8 @@ class Blogs(commands.Cog):
                 "maximum": 10,
                 "roles": [],
                 "userlimit": 1,
+                "max_threads": 0,
+                "thread_duration": 4320,
                 "active": {},
                 "role_req_msg": "you dont have the required roles to create a blog",
                 "toggle": False,
@@ -43,7 +45,7 @@ class Blogs(commands.Cog):
 
     # public commands
     @commands.cooldown(1, 2, commands.BucketType.user)
-    @commands.group(name="blog", aliases=["blogs"])
+    @commands.group(name="blog", aliases=["blogs", "bl"])
     @commands.guild_only()
     @commands.bot_has_permissions(manage_channels=True)
     async def blog(self, ctx: commands.Context):
@@ -735,6 +737,64 @@ class Blogs(commands.Cog):
             )
         )
 
+    # threads
+
+    @blog.group(name="thread", aliases=["threads", "th"])
+    @commands.cooldown(1, 2, commands.BucketType.user)
+    async def threads(self, ctx: commands.Context):
+        """threads on ur blog"""
+
+    @threads.command(name="create", aliases=["new"])
+    async def create_thread(self, ctx: commands.Context, thread_name: str):
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
+
+        max_threads = await self.config.guild(ctx.guild).text.max_threads()
+
+        if max_threads is 0:
+            await ctx.send("blog threads are not enabled")
+            return
+
+        if len(ctx.channel.threads) >= max_threads:
+            await ctx.send(
+                f"blogs can only have {max_threads} thread{'' if max_threads is 1 else 's'}"
+            )
+            return
+
+        thread_duration = await self.config.guild(ctx.guild).text.thread_duration()
+
+        try:
+            thread = await ctx.message.create_thread(
+                name=thread_name,
+                auto_archive_duration=thread_duration,
+            )
+        except discord.Forbidden:
+            return await ctx.send("im missing permissions to create threads")
+
+        await thread.send(f"welcome to {thread.mention}!!")
+
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).text.log_channel()
+        )
+
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=f"blog thread created {thread.name}",
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=f"""
+                  {thread.mention} created by {ctx.author.mention}
+                """,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
+        return await ctx.tick()
+
     # mod commands
 
     @commands.group(name="blogset", aliases=["blogsettings", "blogssettings", "bs"])
@@ -849,8 +909,14 @@ class Blogs(commands.Cog):
 
     @blogsset.command(name="userlimit")
     async def _text_userlimit(self, ctx: commands.Context, limit: int):
-        """set the maximum amount of blogs users can create - def: 1"""
+        """set the maximum number of blogs users can create - def: 1"""
         await self.config.guild(ctx.guild).text.userlimit.set(limit)
+        return await ctx.tick()
+
+    @blogsset.command(name="max_threads")
+    async def max_threads(self, ctx: commands.Context, max_threads: int):
+        """set the maximum number of threads users can create on their blog - def: 0"""
+        await self.config.guild(ctx.guild).text.max_threads.set(max_threads)
         return await ctx.tick()
 
     @blogsset.command(name="rolereqmsg")
