@@ -915,13 +915,13 @@ class Blogs(commands.Cog):
         await self.config.guild(ctx.guild).text.category.set(category.id)
         return await ctx.tick()
 
-    @blogsset.command(name="maxchannels")
+    @blogsset.command(name="max_channels")
     async def _text_maxchannels(self, ctx: commands.Context, maximum: int):
         """set the maximum amount of total blog channels that can be created - def: 10"""
         await self.config.guild(ctx.guild).text.maximum.set(maximum)
         return await ctx.tick()
 
-    @blogsset.group(name="roles")
+    @blogsset.group(name="roles", aliases=["role"])
     async def roles(self, ctx: commands.Context):
         """settings for roles that can use `[p]blog create` - def: @everyone"""
 
