@@ -81,38 +81,56 @@ class CScores(commands.Cog):
 
     @staticmethod
     async def remove_points(self, channel: discord.TextChannel):
-        async with self.config.guild(channel.guild)() as settings:
-            if settings["scoreboard"][c]["score"] > 0:
-                settings["scoreboard"][c]["score"] -= (
-                    1 if settings["scoreboard"][c]["grace_count"] else 0
+        async with self.config.guild(channel.guild).scoreboard() as scoreboard:
+            if scoreboard[str(channel.id)]["score"] > 0:
+                scoreboard[str(channel.id)]["score"] -= (
+                    1 if scoreboard[str(channel.id)]["grace_count"] else 0
                 )
-                if settings["move_enabled"]:
-                    self.check_scores(
+                if await self.config.guild(channel.guild).move_enabled():
+                    await self.check_scores(
                         self,
                         channel,
                     )
 
-            settings["scoreboard"][c]["updated"] = time.time()
-            settings["scoreboard"][c]["grace_count"] += 1
+            scoreboard[str(channel.id)]["updated"] = time.time()
+            scoreboard[str(channel.id)]["grace_count"] += 1
 
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
-        scoreboard = await self.config.guild(message.guild).scoreboard()
+        async with self.config.guild(message.guild).scoreboard() as scoreboard:
+            if await self.config.guild(message.guild).enabled() is False:
+                return
+            if message.author.id is message.guild.me.id:
+                return
+            if str(message.channel.id) not in scoreboard:
+                return
 
-        if await self.config.guild(message.guild).enabled() is False:
-            return
-        if message.author.id is message.guild.me.id:
-            return
-        if str(message.channel.id) not in scoreboard:
-            return
+            ## add points
+            cooldown_sec = await self.config.guild(message.guild).cooldown() * 60
 
-        await self.add_points(self, message.channel)
+            since_update = time.time() - scoreboard[str(message.channel.id)]["updated"]
 
-        if await self.config.guild(message.guild).move_enabled():
-            self.check_scores(self, message.channel)
+            # check cooldown - if grace is over 0 update doesnt matter
+            # if update is low & grace 0 = recent message
+            # if update is low & grace > 0 = recently lost points
+            if scoreboard[str(message.channel.id)]["grace_count"] == 0:
+                if since_update <= cooldown_sec:
+                    return
 
-        return
+            points_max = await self.config.guild(message.guild).range() * len(
+                scoreboard
+            )
+
+            # add points & update last message time
+            if scoreboard[str(message.channel.id)]["score"] < points_max:
+                scoreboard[str(message.channel.id)]["score"] += 1
+            scoreboard[str(message.channel.id)]["updated"] = time.time()
+            scoreboard[str(message.channel.id)]["grace_count"] = 0
+
+            # check score
+            if await self.config.guild(message.guild).move_enabled():
+                self.check_scores(self, message.channel)
 
     # points lose logic
     @tasks.loop(minutes=__global_grace__)
@@ -127,8 +145,20 @@ class CScores(commands.Cog):
                     )
 
                     if since_update >= settings["grace"]:  # grace ended
-                        channel = self.bot.get_channel(int(c))
-                        await self.remove_points(self, channel)
+                        if settings["scoreboard"][c]["score"] > 0:
+                            settings["scoreboard"][c]["score"] -= (
+                                1 if settings["scoreboard"][c]["grace_count"] else 0
+                            )
+                            if settings["move_enabled"]:
+                                await self.check_scores(
+                                    self,
+                                    self.bot.get_channel(
+                                        int(settings["scoreboard"][c])
+                                    ),
+                                )
+
+                        settings["scoreboard"][c]["updated"] = time.time()
+                        settings["scoreboard"][c]["grace_count"] += 1
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.group(
@@ -159,6 +189,7 @@ class CScores(commands.Cog):
 
     @staticmethod
     async def log(
+        self,
         ctx: commands.Context,
         log_channel: discord.TextChannel,
         title: str,
@@ -173,6 +204,8 @@ class CScores(commands.Cog):
             ),
             allowed_mentions=discord.AllowedMentions.none(),
         )
+
+    ### actions that you perform on channels
 
     @channelscores.command(name="track")
     async def track_channels(
@@ -226,6 +259,7 @@ class CScores(commands.Cog):
 
         if log_channel:
             await self.log(
+                self,
                 ctx,
                 log_channel,
                 f"scores - channels tracked",
@@ -324,32 +358,21 @@ class CScores(commands.Cog):
     async def pin_channels(self, ctx: commands.Context, *channels: discord.TextChannel):
         """pin channels so they dont move"""
 
-        new_pins = []
-
         async with self.config.guild(ctx.guild).scoreboard() as scoreboard:
-            new_pins[:] = [
-                c
-                for c in channels
-                if str(c.id) in scoreboard and scoreboard[str(c.id)]["pinned"] is False
-            ]
-            for c in new_pins:
+            for c in channels:
                 scoreboard[str(c.id)]["pinned"] = True
 
-        log_channel = ctx.guild.get_channel(
-            await self.config.guild(ctx.guild).log_channel()
-        )
+        log_channel = await self.get_log_channel(self, ctx)
 
-        if log_channel and new_pins:
-            await log_channel.send(
-                embed=discord.Embed(
-                    title=f"channels pinned - scoreboard",
-                    color=await ctx.embed_color(),
-                    timestamp=datetime.datetime.utcnow(),
-                    description=f"""
-              {humanize_list([c.mention for c in new_pins])} pinned by {ctx.author.mention}
+        if log_channel:
+            await self.log(
+                self,
+                ctx,
+                log_channel,
+                title=f"channels pinned - scoreboard",
+                description=f"""
+              {humanize_list([c.mention for c in channels])} pinned by {ctx.author.mention}
             """,
-                ),
-                allowed_mentions=discord.AllowedMentions.none(),
             )
 
         return await ctx.tick()
@@ -390,7 +413,20 @@ class CScores(commands.Cog):
 
         return await ctx.tick()
 
-    @channelscores.command(name="log")
+    @channelscores.command(name="link")
+    async def link_categories(
+        self, ctx: commands.Context, *categories: discord.CategoryChannel
+    ):
+        """link categories so they act as one logical volume"""
+        raise
+
+    ### server settings
+
+    @channelscores.group(name="settings", aliases=["set", "s"])
+    async def settings(self, ctx):
+        """server settings"""
+
+    @settings.command(name="log")
     async def set_log_channel(
         self, ctx: commands.Context, log_channel: discord.TextChannel
     ):
@@ -409,7 +445,7 @@ class CScores(commands.Cog):
 
         return await ctx.tick()
 
-    @channelscores.command(name="cooldown")
+    @settings.command(name="cooldown")
     async def set_cooldown(self, ctx: commands.Context, minutes: int):
         """set on-message points cooldown in minutes - def: 30"""
         if minutes < 1 or minutes > 10000:
@@ -421,7 +457,7 @@ class CScores(commands.Cog):
         await self.config.guild(ctx.guild).cooldown.set(minutes)
         return await ctx.tick()
 
-    @channelscores.command(name="grace")
+    @settings.command(name="grace")
     async def set_grace(self, ctx: commands.Context, minutes: int):
         """set grace period in minutes - def: 60"""
         if minutes < self.__global_grace__ or minutes > 10000:
@@ -438,19 +474,19 @@ class CScores(commands.Cog):
         await self.config.guild(ctx.guild).grace.set(minutes)
         return await ctx.tick()
 
-    @channelscores.command(name="enable")
+    @settings.command(name="enable")
     async def enable(self, ctx: commands.Context):
         """enable channel scores"""
         await self.config.guild(ctx.guild).enabled.set(True)
         return await ctx.tick()
 
-    @channelscores.command(name="disable")
+    @settings.command(name="disable")
     async def disable(self, ctx: commands.Context):
         """disable channel scores"""
         await self.config.guild(ctx.guild).enabled.set(False)
         return await ctx.tick()
 
-    @channelscores.command(name="range")
+    @settings.command(name="range")
     async def set_range(self, ctx: commands.Context, new_range: int):
         """set min-max points according to total number of channels. 'range 2' with 10 channels results in 0 - 20 range - def: 1"""
         if new_range < 1 or new_range > 5:
@@ -459,14 +495,7 @@ class CScores(commands.Cog):
         await self.config.guild(ctx.guild).range.set(new_range)
         return await ctx.tick()
 
-    @channelscores.command(name="link")
-    async def link_categories(
-        self, ctx: commands.Context, *categories: discord.CategoryChannel
-    ):
-        """link categories so they act as one logical volume"""
-        raise
-
-    @channelscores.group(name="move")
+    @settings.group(name="move")
     async def move(self, ctx):
         """disable or enable channel movement"""
 
@@ -483,7 +512,7 @@ class CScores(commands.Cog):
         return await ctx.tick()
 
     @commands.bot_has_permissions(embed_links=True)
-    @channelscores.command(name="settings", aliases=["set"])
+    @settings.command(name="view")
     async def view_settings(self, ctx: commands.Context):
         """view the current channel scores settings"""
         settings = await self.config.guild(ctx.guild)()
