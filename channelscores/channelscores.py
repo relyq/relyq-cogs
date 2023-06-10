@@ -1,5 +1,6 @@
 import time
 import datetime
+import math
 
 from operator import attrgetter
 
@@ -80,9 +81,6 @@ class CScores(commands.Cog):
             scoreboard[str(message.channel.id)]["updated"] = time.time()
             scoreboard[str(message.channel.id)]["grace_count"] = 0
 
-            # debug
-            # await message.channel.send(f"added 1 point to {message.channel.mention}")
-
             return
 
     # points lose logic
@@ -94,7 +92,7 @@ class CScores(commands.Cog):
                     return
                 for c in settings["scoreboard"]:
                     since_update = int(
-                        time.time() - settings["scoreboard"][c]["updated"]
+                        (time.time() - settings["scoreboard"][c]["updated"]) / 60
                     )
 
                     if since_update >= settings["grace"]:  # grace ended
@@ -104,11 +102,6 @@ class CScores(commands.Cog):
                             )
                         settings["scoreboard"][c]["updated"] = time.time()
                         settings["scoreboard"][c]["grace_count"] += 1
-
-                        # debug
-                        # await self.bot.get_channel(int(c)).send(
-                        #    f"grace period ended {settings['scoreboard'][c]['grace_count']} times - lost {settings['scoreboard'][c]['grace_count'] - 1} points"
-                        # )
 
         return
 
@@ -337,7 +330,12 @@ class CScores(commands.Cog):
     @channelscores.command(name="view")
     async def view_channel(self, ctx: commands.Context):
         """view channel score"""
-        c = (await self.config.guild(ctx.guild).scoreboard())[str(ctx.channel.id)]
+        try:
+            c = (await self.config.guild(ctx.guild).scoreboard())[str(ctx.channel.id)]
+        except KeyError:
+            await ctx.send("this channel is not part of the scoreboard")
+            return
+
         return await ctx.send(
             embed=discord.Embed(
                 title=f"{ctx.channel.mention} score",
@@ -371,9 +369,15 @@ class CScores(commands.Cog):
         )
 
     @channelscores.command(name="scoreboard", aliases=["board", "top"])
-    async def view_scoreboard(self, ctx: commands.Context):
+    async def view_scoreboard(self, ctx: commands.Context, page=1):
         """view the scoreboard"""
         scoreboard = await self.config.guild(ctx.guild).scoreboard()
+
+        page_size = 15
+
+        offset = (page - 1) * page_size
+
+        total_pages = math.ceil(len(scoreboard) / page_size)
 
         scores = []
 
@@ -382,13 +386,20 @@ class CScores(commands.Cog):
 
         scores.sort(key=lambda x: x.score, reverse=True)
 
+        scores = [
+            f"{index}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points"
+            for index, c in enumerate(scores)
+        ]
+
+        scores = scores[offset : offset + page_size]
+
         nl = "\n"
-        top = f"{nl.join([f'{index}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points' for index, c in enumerate(scores)])}"
+        top = f"{nl.join(scores)}"
 
         return await ctx.send(
             embed=discord.Embed(
-                title=f"scoreboard",
+                title=f"{ctx.guild.name} scoreboard - {page_size} of {len(scoreboard) - 1}",
                 color=await ctx.embed_color(),
                 description=top,
-            )
+            ).set_footer(text=f"page {page} of {total_pages}")
         )
