@@ -55,42 +55,64 @@ class CScores(commands.Cog):
     async def check_scores(self, channel: discord.TextChannel):
         raise
 
-    # points win logic
-    @commands.Cog.listener("on_message")
-    async def on_message_listener(self, message: discord.Message):
-        async with self.config.guild(message.guild).scoreboard() as scoreboard:
-            if await self.config.guild(message.guild).enabled() is False:
-                return
-            if message.author.id is message.guild.me.id:
-                return
-            if str(message.channel.id) not in scoreboard:
-                return
+    @staticmethod
+    async def add_points(self, channel: discord.TextChannel):
+        async with self.config.guild(channel.guild).scoreboard() as scoreboard:
+            cooldown_sec = await self.config.guild(channel.guild).cooldown() * 60
 
-            cooldown_sec = await self.config.guild(message.guild).cooldown() * 60
-
-            since_update = time.time() - scoreboard[str(message.channel.id)]["updated"]
+            since_update = time.time() - scoreboard[str(channel.id)]["updated"]
 
             # check cooldown - if grace is over 0 update doesnt matter
             # if update is low & grace 0 = recent message
             # if update is low & grace > 0 = recently lost points
-            if scoreboard[str(message.channel.id)]["grace_count"] == 0:
+            if scoreboard[str(channel.id)]["grace_count"] == 0:
                 if since_update <= cooldown_sec:
                     return
 
-            points_max = await self.config.guild(message.guild).range() * len(
+            points_max = await self.config.guild(channel.guild).range() * len(
                 scoreboard
             )
 
             # add points & update last message time
-            if scoreboard[str(message.channel.id)]["score"] < points_max:
-                scoreboard[str(message.channel.id)]["score"] += 1
-            scoreboard[str(message.channel.id)]["updated"] = time.time()
-            scoreboard[str(message.channel.id)]["grace_count"] = 0
+            if scoreboard[str(channel.id)]["score"] < points_max:
+                scoreboard[str(channel.id)]["score"] += 1
+            scoreboard[str(channel.id)]["updated"] = time.time()
+            scoreboard[str(channel.id)]["grace_count"] = 0
 
-            if await self.config.guild(message.guild).move_enabled():
-                self.check_scores(self, message.channel)
+    @staticmethod
+    async def remove_points(self, channel: discord.TextChannel):
+        async with self.config.guild(channel.guild)() as settings:
+            if settings["scoreboard"][c]["score"] > 0:
+                settings["scoreboard"][c]["score"] -= (
+                    1 if settings["scoreboard"][c]["grace_count"] else 0
+                )
+                if settings["move_enabled"]:
+                    self.check_scores(
+                        self,
+                        channel,
+                    )
 
+            settings["scoreboard"][c]["updated"] = time.time()
+            settings["scoreboard"][c]["grace_count"] += 1
+
+    # points win logic
+    @commands.Cog.listener("on_message")
+    async def on_message_listener(self, message: discord.Message):
+        scoreboard = await self.config.guild(message.guild).scoreboard()
+
+        if await self.config.guild(message.guild).enabled() is False:
             return
+        if message.author.id is message.guild.me.id:
+            return
+        if str(message.channel.id) not in scoreboard:
+            return
+
+        await self.add_points(self, message.channel)
+
+        if await self.config.guild(message.guild).move_enabled():
+            self.check_scores(self, message.channel)
+
+        return
 
     # points lose logic
     @tasks.loop(minutes=__global_grace__)
@@ -105,22 +127,8 @@ class CScores(commands.Cog):
                     )
 
                     if since_update >= settings["grace"]:  # grace ended
-                        if settings["scoreboard"][c]["score"] > 0:
-                            settings["scoreboard"][c]["score"] -= (
-                                1 if settings["scoreboard"][c]["grace_count"] else 0
-                            )
-                            if settings["move_enabled"]:
-                                self.check_scores(
-                                    self,
-                                    self.bot.get_channel(
-                                        int(settings["scoreboard"][c])
-                                    ),
-                                )
-
-                        settings["scoreboard"][c]["updated"] = time.time()
-                        settings["scoreboard"][c]["grace_count"] += 1
-
-        return
+                        channel = self.bot.get_channel(int(c))
+                        await self.remove_points(self, channel)
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.group(
