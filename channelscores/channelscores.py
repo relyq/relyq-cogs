@@ -327,27 +327,6 @@ class CScores(commands.Cog):
         await self.config.guild(ctx.guild).range.set(new_range)
         return await ctx.tick()
 
-    @channelscores.command(name="view")
-    async def view_channel(self, ctx: commands.Context):
-        """view channel score"""
-        try:
-            c = (await self.config.guild(ctx.guild).scoreboard())[str(ctx.channel.id)]
-        except KeyError:
-            await ctx.send("this channel is not part of the scoreboard")
-            return
-
-        return await ctx.send(
-            embed=discord.Embed(
-                title=f"{ctx.channel.mention} score",
-                color=await ctx.embed_color(),
-                description=f"""
-            **score:** {c["score"]}
-            **pinned:** {"yes" if c["pinned"] is True else "no"}
-            **added:** {time.ctime(c["added"])}
-            """,
-            )
-        )
-
     @commands.bot_has_permissions(embed_links=True)
     @channelscores.command(name="settings", aliases=["set"])
     async def view_settings(self, ctx: commands.Context):
@@ -368,7 +347,9 @@ class CScores(commands.Cog):
             )
         )
 
-    @channelscores.command(name="scoreboard", aliases=["board", "top"])
+    # public commands
+
+    @commands.command(name="scoreboard", aliases=["board", "top"])
     async def view_scoreboard(self, ctx: commands.Context, page=1):
         """view the scoreboard"""
         scoreboard = await self.config.guild(ctx.guild).scoreboard()
@@ -402,4 +383,35 @@ class CScores(commands.Cog):
                 color=await ctx.embed_color(),
                 description=top,
             ).set_footer(text=f"page {page} of {total_pages}")
+        )
+
+    @commands.command(name="rank")
+    async def view_channel(
+        self, ctx: commands.Context, channel: discord.TextChannel = None
+    ):
+        """view channel score"""
+        mention = None
+        try:
+            c = (await self.config.guild(ctx.guild).scoreboard())[str(channel.id)]
+            mention = channel.mention
+        except:
+            try:
+                c = (await self.config.guild(ctx.guild).scoreboard())[
+                    str(ctx.channel.id)
+                ]
+                mention = ctx.channel.mention
+            except KeyError:
+                await ctx.send("this channel is not part of the scoreboard")
+                return
+
+        return await ctx.send(
+            embed=discord.Embed(
+                title=f"{mention} score",
+                color=await ctx.embed_color(),
+                description=f"""
+            **score:** {c["score"]}
+            **pinned:** {"yes" if c["pinned"] is True else "no"}
+            **added:** {time.ctime(c["added"])}
+            """,
+            )
         )
