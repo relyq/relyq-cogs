@@ -716,13 +716,13 @@ class Blogs(commands.Cog):
 
         max_threads = await self.config.guild(ctx.guild).text.max_threads()
 
-        if max_threads is 0:
+        if max_threads == 0:
             await ctx.send("blog threads are not enabled")
             return
 
         if len(ctx.channel.threads) >= max_threads:
             await ctx.send(
-                f"blogs can only have {max_threads} thread{'' if max_threads is 1 else 's'}"
+                f"blogs can only have {max_threads} thread{'' if max_threads == 1 else 's'}"
             )
             return
 
