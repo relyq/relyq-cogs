@@ -229,8 +229,8 @@ class CScores(commands.Cog):
         async with self.config.guild(ctx.guild)() as settings:
             # add untracked categories
             for category in categories:
-                if category.id not in settings["categories"]:
-                    settings["categories"][category.id] = {
+                if str(category.id) not in settings["categories"]:
+                    settings["categories"][str(category.id)] = {
                         "tracked": True,
                         "added": time.time(),
                         "previous": None,
@@ -238,12 +238,12 @@ class CScores(commands.Cog):
                     }
 
                 # set all categories to tracked
-                settings["categories"][category.id]["tracked"] = True
+                settings["categories"][str(category.id)]["tracked"] = True
 
             for channel in text_channels:
                 # add untracked channels
-                if channel.id not in settings["scoreboard"]:
-                    settings["scoreboard"][channel.id] = {
+                if str(channel.id) not in settings["scoreboard"]:
+                    settings["scoreboard"][str(channel.id)] = {
                         "score": 0,
                         "pinned": False,
                         "added": time.time(),
@@ -253,7 +253,7 @@ class CScores(commands.Cog):
                     }
 
                 # set all channels to tracked
-                settings["scoreboard"][channel.id]["tracked"] = True
+                settings["scoreboard"][str(channel.id)]["tracked"] = True
 
         log_channel = await self.get_log_channel(self, ctx)
 
@@ -301,6 +301,7 @@ class CScores(commands.Cog):
 
         if log_channel:
             await self.log(
+                self,
                 ctx,
                 log_channel,
                 f"scores - channels untracked",
@@ -338,18 +339,17 @@ class CScores(commands.Cog):
             if type(cat) is discord.CategoryChannel
         ]
 
-        async with self.config.guild(ctx.guild).categories() as cats:
+        async with self.config.guild(ctx.guild)() as settings:
             # add untracked categories
             for category in categories:
                 try:
-                    del cats[category.id]
+                    del settings["categories"][str(category.id)]
                 except:
                     pass
 
-        async with self.config.guild(ctx.guild).scoreboard() as scoreboard:
             for channel in text_channels:
                 try:
-                    del scoreboard[channel.id]
+                    del settings["scoreboard"][str(channel.id)]
                 except:
                     pass
 
@@ -357,7 +357,7 @@ class CScores(commands.Cog):
             await self.config.guild(ctx.guild).log_channel()
         )
 
-        if log_channel and text_channels:
+        if log_channel:
             await log_channel.send(
                 embed=discord.Embed(
                     title=f"scores - channels removed",
