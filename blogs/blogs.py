@@ -421,46 +421,7 @@ class Blogs(commands.Cog):
     @settings.command(name="name", aliases=["title", "n"])
     async def blog_name(self, ctx: commands.Context, *, new_name: str):
         """rename ur blog"""
-        active = await self.config.guild(ctx.guild).text.active()
-        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
-
-        if ctx.channel.id not in active_author:
-            return
-
-        # empty string should return command help anyway
-        if not new_name:
-            await ctx.send("your blog name cant be empty dummy")
-            return
-
-        """ cant let this be public - im getting rate limited
-        active_blog_names = [c.name for c in
-                             [ctx.guild.get_channel(c[0]) for c in active]]
-
-        if new_name in active_blog_names:
-            await ctx.send(f"theres already a blog named {new_name} sorry")
-            return
-        """
-
-        log_channel = ctx.guild.get_channel(
-            await self.config.guild(ctx.guild).text.log_channel()
-        )
-
-        if log_channel:
-            await log_channel.send(
-                embed=discord.Embed(
-                    title=f"blog renamed {ctx.channel.mention}",
-                    color=await ctx.embed_color(),
-                    timestamp=datetime.datetime.utcnow(),
-                    description=f"""
-          {ctx.channel.name} renamed to {new_name} by {ctx.author.mention}
-        """,
-                ),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-
-        await ctx.channel.edit(name=new_name)
-
-        return await ctx.tick()
+        return await self.rename_blog(ctx, new_name=new_name)
 
     @commands.cooldown(1, 60, commands.BucketType.user)
     @settings.command(name="topic", aliases=["description", "desc", "d"])
