@@ -321,19 +321,37 @@ class CScores(commands.Cog):
 
     @channelscores.command(name="forget")
     async def remove_channels(
-        self, ctx: commands.Context, category: discord.abc.GuildChannel
+        self, ctx: commands.Context, *channels: discord.abc.GuildChannel
     ):
         """remove channels from the database"""
-        raise
+
+        if not channels:
+            return await ctx.send("no channels or categories to remove")
 
         text_channels = []
+        categories = []
 
-        [text_channels.append(tc) for tc in category.text_channels]
+        [text_channels.append(tc) for tc in channels if type(tc) is discord.TextChannel]
+        [
+            categories.append(cat)
+            for cat in channels
+            if type(cat) is discord.CategoryChannel
+        ]
+
+        async with self.config.guild(ctx.guild).categories() as cats:
+            # add untracked categories
+            for category in categories:
+                try:
+                    del cats[category.id]
+                except:
+                    pass
 
         async with self.config.guild(ctx.guild).scoreboard() as scoreboard:
-            text_channels[:] = [c for c in text_channels if str(c.id) in scoreboard]
-            for c in text_channels:
-                del scoreboard[str(c.id)]
+            for channel in text_channels:
+                try:
+                    del scoreboard[channel.id]
+                except:
+                    pass
 
         log_channel = ctx.guild.get_channel(
             await self.config.guild(ctx.guild).log_channel()
@@ -342,12 +360,13 @@ class CScores(commands.Cog):
         if log_channel and text_channels:
             await log_channel.send(
                 embed=discord.Embed(
-                    title=f"category {category.name} removed from scoreboard",
+                    title=f"scores - channels removed",
                     color=await ctx.embed_color(),
                     timestamp=datetime.datetime.utcnow(),
                     description=f"""
-              {humanize_list([c.mention for c in text_channels])} removed by {ctx.author.mention}
-            """,
+                categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
+                channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+                removed by {ctx.author.mention}""",
                 ),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
