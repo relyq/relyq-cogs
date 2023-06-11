@@ -184,26 +184,26 @@ class CScores(commands.Cog):
             return False
 
     @staticmethod
-    async def get_log_channel(self, ctx: commands.Context) -> discord.TextChannel:
-        return ctx.guild.get_channel(await self.config.guild(ctx.guild).log_channel())
-
-    @staticmethod
-    async def log(
+    async def log_to_channel(
         self,
         ctx: commands.Context,
-        log_channel: discord.TextChannel,
         title: str,
         description: str,
     ):
-        return await log_channel.send(
-            embed=discord.Embed(
-                title=title,
-                color=await ctx.embed_color(),
-                timestamp=datetime.datetime.utcnow(),
-                description=description,
-            ),
-            allowed_mentions=discord.AllowedMentions.none(),
+        log_channel = ctx.guild.get_channel(
+            await self.config.guild(ctx.guild).log_channel()
         )
+
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title=title,
+                    color=await ctx.embed_color(),
+                    timestamp=datetime.datetime.utcnow(),
+                    description=description,
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
     ### actions that you perform on channels
 
@@ -255,19 +255,15 @@ class CScores(commands.Cog):
                 # set all channels to tracked
                 settings["scoreboard"][str(channel.id)]["tracked"] = True
 
-        log_channel = await self.get_log_channel(self, ctx)
-
-        if log_channel:
-            await self.log(
-                self,
-                ctx,
-                log_channel,
-                f"scores - channels tracked",
-                f"""
-                categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-                channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
-                added by {ctx.author.mention}""",
-            )
+        await self.log_to_channel(
+            self,
+            ctx,
+            title="scores - channels tracked",
+            description="""
+            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
+            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            added by {ctx.author.mention}""",
+        )
 
         return await ctx.tick()
 
@@ -297,19 +293,15 @@ class CScores(commands.Cog):
                 # set all channels to untracked
                 settings["scoreboard"][str(channel.id)]["tracked"] = False
 
-        log_channel = await self.get_log_channel(self, ctx)
-
-        if log_channel:
-            await self.log(
-                self,
-                ctx,
-                log_channel,
-                f"scores - channels untracked",
-                f"""
-                categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-                channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
-                added by {ctx.author.mention}""",
-            )
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - channels untracked",
+            description="""
+            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
+            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            added by {ctx.author.mention}""",
+        )
 
         return await ctx.tick()
 
@@ -320,6 +312,15 @@ class CScores(commands.Cog):
         """reset channel scores"""
         raise
 
+        await ctx.send(
+            "are you sure you want to reset the scores for these channels and categories?"
+        )
+
+        cont = await self.confirm_message()
+
+        if not cont:
+            return await ctx.send("cancelled")
+
     @channelscores.command(name="forget")
     async def remove_channels(
         self, ctx: commands.Context, *channels: discord.abc.GuildChannel
@@ -328,6 +329,15 @@ class CScores(commands.Cog):
 
         if not channels:
             return await ctx.send("no channels or categories to remove")
+
+        await ctx.send(
+            "are you sure you want to remove these channels and categories from the scoreboard?"
+        )
+
+        cont = await self.confirm_message()
+
+        if not cont:
+            return await ctx.send("cancelled")
 
         text_channels = []
         categories = []
@@ -353,23 +363,15 @@ class CScores(commands.Cog):
                 except:
                     pass
 
-        log_channel = ctx.guild.get_channel(
-            await self.config.guild(ctx.guild).log_channel()
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - channels removed",
+            description=f"""
+            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
+            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            removed by {ctx.author.mention}""",
         )
-
-        if log_channel:
-            await log_channel.send(
-                embed=discord.Embed(
-                    title=f"scores - channels removed",
-                    color=await ctx.embed_color(),
-                    timestamp=datetime.datetime.utcnow(),
-                    description=f"""
-                categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-                channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
-                removed by {ctx.author.mention}""",
-                ),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
 
         return await ctx.tick()
 
@@ -381,18 +383,14 @@ class CScores(commands.Cog):
             for c in channels:
                 scoreboard[str(c.id)]["pinned"] = True
 
-        log_channel = await self.get_log_channel(self, ctx)
-
-        if log_channel:
-            await self.log(
-                self,
-                ctx,
-                log_channel,
-                title=f"channels pinned - scoreboard",
-                description=f"""
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - channels pinned",
+            description=f"""
               {humanize_list([c.mention for c in channels])} pinned by {ctx.author.mention}
             """,
-            )
+        )
 
         return await ctx.tick()
 
@@ -413,22 +411,14 @@ class CScores(commands.Cog):
             for c in new_unpinned:
                 scoreboard[str(c.id)]["pinned"] = False
 
-        log_channel = ctx.guild.get_channel(
-            await self.config.guild(ctx.guild).log_channel()
-        )
-
-        if log_channel and new_unpinned:
-            await log_channel.send(
-                embed=discord.Embed(
-                    title=f"channels unpinned - scoreboard",
-                    color=await ctx.embed_color(),
-                    timestamp=datetime.datetime.utcnow(),
-                    description=f"""
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"channels unpinned - scoreboard",
+            description=f"""
               {humanize_list([c.mention for c in new_unpinned])} unpinned by {ctx.author.mention}
             """,
-                ),
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+        )
 
         return await ctx.tick()
 
@@ -454,7 +444,7 @@ class CScores(commands.Cog):
 
         await log_channel.send(
             embed=discord.Embed(
-                title="channel scores log channel set",
+                title="scores - channel scores log channel set",
                 color=await ctx.embed_color(),
                 description=f"""
             {log_channel.mention} set as log channel by {ctx.author.mention}
@@ -473,6 +463,15 @@ class CScores(commands.Cog):
             )
             return
 
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - cooldown changed",
+            description=f"""
+              cooldown changed to {minutes} minutes by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).cooldown.set(minutes)
         return await ctx.tick()
 
@@ -490,18 +489,47 @@ class CScores(commands.Cog):
                 f"grace has been set. i suggest setting it to multiples of {self.__global_grace__} for greater accuracy"
             )
 
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - grace changed",
+            description=f"""
+            grace changed to {minutes} minutes by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).grace.set(minutes)
         return await ctx.tick()
 
-    @settings.command(name="enable")
+    @settings.command(name="enable", aliases=["enabled"])
     async def enable(self, ctx: commands.Context):
         """enable channel scores"""
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - enabled",
+            description=f"""
+              scores enabled by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).enabled.set(True)
         return await ctx.tick()
 
-    @settings.command(name="disable")
+    @settings.command(name="disable", aliases=["disabled"])
     async def disable(self, ctx: commands.Context):
         """disable channel scores"""
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - disabled",
+            description=f"""
+              scores disabled by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).enabled.set(False)
         return await ctx.tick()
 
@@ -511,22 +539,52 @@ class CScores(commands.Cog):
         if new_range < 1 or new_range > 5:
             await ctx.send("range can only be set from 1 to 5 currently")
             return
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - range changed",
+            description=f"""
+              range changed to {new_range} by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).range.set(new_range)
         return await ctx.tick()
 
-    @settings.group(name="move")
+    @settings.group(name="move", aliases=["sync"])
     async def move(self, ctx):
         """disable or enable channel movement"""
 
     @move.command(name="enable")
     async def move_enable(self, ctx: commands.Context):
         """enable channel movement"""
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - sync enabled",
+            description=f"""
+              channel position sync enabled by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).move_enabled.set(True)
         return await ctx.tick()
 
     @move.command(name="disable")
     async def move_disable(self, ctx: commands.Context):
         """disable channel movement"""
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - sync disabled",
+            description=f"""
+              channel position sync disabled by {ctx.author.mention}
+            """,
+        )
+
         await self.config.guild(ctx.guild).move_enabled.set(False)
         return await ctx.tick()
 
@@ -535,6 +593,13 @@ class CScores(commands.Cog):
     async def view_settings(self, ctx: commands.Context):
         """view the current channel scores settings"""
         settings = await self.config.guild(ctx.guild)()
+
+        untracked_count = 0
+
+        for c in settings["scoreboard"]:
+            if settings["scoreboard"][str(c)]["tracked"] is False:
+                untracked_count += 1
+
         return await ctx.send(
             embed=discord.Embed(
                 title="channel scores settings",
@@ -549,7 +614,7 @@ class CScores(commands.Cog):
                 [f"{ctx.guild.get_channel(int(cat)).name} ({'tracked' if settings['categories'][cat]['tracked'] else 'untracked'})" for cat in settings["categories"]]
               )
               if settings["categories"] else ""}
-            **channels:** {len(settings["scoreboard"])}
+            **channels:** {len(settings["scoreboard"])} - {untracked_count} not tracked
             **range:** {settings["range"]} / 0 to {settings["range"] * len(settings["scoreboard"])} points
             """,
             )
