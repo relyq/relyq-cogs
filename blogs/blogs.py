@@ -1089,7 +1089,7 @@ class Blogs(commands.Cog):
             await self.config.guild(ctx.guild).text.category()
         )
 
-        ctx.send("starting resync")
+        await ctx.send("starting resync")
 
         for chan in active:
             try:
