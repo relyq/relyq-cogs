@@ -1,6 +1,8 @@
 import time
 import datetime
 import math
+import asyncio
+from collections import OrderedDict
 
 from operator import attrgetter
 
@@ -36,7 +38,7 @@ class CScores(commands.Cog):
         default_guild = {
             "log_channel": None,
             "enabled": False,
-            "move_enabled": False,
+            "sync": False,
             "categories": {},
             "scoreboard": {},
             "cooldown": 30,
@@ -52,8 +54,51 @@ class CScores(commands.Cog):
         self.main_loop.cancel()
 
     @staticmethod
-    async def check_scores(self, channel: discord.TextChannel):
-        raise
+    async def sync_channels(self, guild: discord.Guild):
+        categories = await self.config.guild(guild).categories()
+        scoreboard = await self.config.guild(guild).scoreboard()
+        scores = []
+
+        for c in scoreboard:
+            if scoreboard[str(c)]["pinned"]:
+                continue
+            scores.append(CScore_partial(c, scoreboard[str(c)]["score"]))
+
+        scores.sort(key=lambda x: x.score, reverse=True)
+
+        for category in categories:
+            if categories[category]["tracked"]:
+                category = guild.get_channel(int(category))
+                category.text_channels.sort(key=lambda x: x.position)
+                first_pos = category.text_channels[0].position
+                pins = []
+
+                for channel in category.text_channels:
+                    if scoreboard[str(channel.id)]["pinned"]:
+                        pins.append(
+                            (
+                                CScore_partial(
+                                    channel.id, scoreboard[str(channel.id)]["score"]
+                                ),
+                                channel.position - first_pos,
+                            )
+                        )
+                pins.sort(key=lambda x: x[1])
+
+                for pin in pins:
+                    scores.insert(pin[1], pin[0])
+
+                for rank, chanscore in enumerate(scores):
+                    if scoreboard[str(chanscore.id)]["tracked"]:
+                        channel = guild.get_channel(int(chanscore.id))
+                        if channel.position is not first_pos + rank:
+                            await channel.move(
+                                category=category,
+                                beginning=True,
+                                offset=rank,
+                                reason="channel scores",
+                            )
+                            await asyncio.sleep(0.5)  # dont get rate limited
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
@@ -86,7 +131,7 @@ class CScores(commands.Cog):
                 scoreboard[str(channel.id)]["score"] -= (
                     1 if scoreboard[str(channel.id)]["grace_count"] else 0
                 )
-                if await self.config.guild(channel.guild).move_enabled():
+                if await self.config.guild(channel.guild).sync():
                     await self.check_scores(
                         self,
                         channel,
@@ -107,30 +152,33 @@ class CScores(commands.Cog):
                 return
 
             ## add points
-            cooldown_sec = await self.config.guild(message.guild).cooldown() * 60
+            if scoreboard[str(message.channel.id)]["tracked"]:
+                cooldown_sec = await self.config.guild(message.guild).cooldown() * 60
 
-            since_update = time.time() - scoreboard[str(message.channel.id)]["updated"]
+                since_update = (
+                    time.time() - scoreboard[str(message.channel.id)]["updated"]
+                )
 
-            # check cooldown - if grace is over 0 update doesnt matter
-            # if update is low & grace 0 = recent message
-            # if update is low & grace > 0 = recently lost points
-            if scoreboard[str(message.channel.id)]["grace_count"] == 0:
-                if since_update <= cooldown_sec:
-                    return
+                # check cooldown - if grace is over 0 update doesnt matter
+                # if update is low & grace 0 = recent message
+                # if update is low & grace > 0 = recently lost points
+                if scoreboard[str(message.channel.id)]["grace_count"] == 0:
+                    if since_update <= cooldown_sec:
+                        return
 
-            points_max = await self.config.guild(message.guild).range() * len(
-                scoreboard
-            )
+                points_max = await self.config.guild(message.guild).range() * len(
+                    scoreboard
+                )
 
-            # add points & update last message time
-            if scoreboard[str(message.channel.id)]["score"] < points_max:
-                scoreboard[str(message.channel.id)]["score"] += 1
-            scoreboard[str(message.channel.id)]["updated"] = time.time()
-            scoreboard[str(message.channel.id)]["grace_count"] = 0
+                # add points & update last message time
+                if scoreboard[str(message.channel.id)]["score"] < points_max:
+                    scoreboard[str(message.channel.id)]["score"] += 1
+                scoreboard[str(message.channel.id)]["updated"] = time.time()
+                scoreboard[str(message.channel.id)]["grace_count"] = 0
 
             # check score
-            if await self.config.guild(message.guild).move_enabled():
-                self.check_scores(self, message.channel)
+            if await self.config.guild(message.guild).sync():
+                await self.sync_channels(self, message.guild)
 
     # points lose logic
     @tasks.loop(minutes=__global_grace__)
@@ -140,25 +188,24 @@ class CScores(commands.Cog):
                 if settings["enabled"] is False:
                     return
                 for c in settings["scoreboard"]:
-                    since_update = int(
-                        (time.time() - settings["scoreboard"][c]["updated"]) / 60
-                    )
+                    if settings["scoreboard"][c]["tracked"]:
+                        since_update = int(
+                            (time.time() - settings["scoreboard"][c]["updated"]) / 60
+                        )
 
-                    if since_update >= settings["grace"]:  # grace ended
-                        if settings["scoreboard"][c]["score"] > 0:
-                            settings["scoreboard"][c]["score"] -= (
-                                1 if settings["scoreboard"][c]["grace_count"] else 0
-                            )
-                            if settings["move_enabled"]:
-                                await self.check_scores(
-                                    self,
-                                    self.bot.get_channel(
-                                        int(settings["scoreboard"][c])
-                                    ),
+                        if since_update >= settings["grace"]:  # grace ended
+                            if settings["scoreboard"][c]["score"] > 0:
+                                settings["scoreboard"][c]["score"] -= (
+                                    1 if settings["scoreboard"][c]["grace_count"] else 0
                                 )
+                                if settings["sync"]:
+                                    await self.sync_channels(
+                                        self,
+                                        self.bot.get_guild(int(g)),
+                                    )
 
-                        settings["scoreboard"][c]["updated"] = time.time()
-                        settings["scoreboard"][c]["grace_count"] += 1
+                            settings["scoreboard"][c]["updated"] = time.time()
+                            settings["scoreboard"][c]["grace_count"] += 1
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.group(
@@ -205,6 +252,22 @@ class CScores(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
+    @staticmethod
+    def sort_catchan(self, catchan) -> dict:
+        channels = {"categories": [], "text_channels": []}
+
+        for c in catchan:
+            if type(c) is discord.TextChannel:
+                if c not in channels["text_channels"]:
+                    channels["text_channels"].append(c)
+
+            if type(c) is discord.CategoryChannel:
+                channels["categories"].append(c)
+                for tc in c.text_channels:
+                    if tc not in channels["text_channels"]:
+                        channels["text_channels"].append(tc)
+        return channels
+
     ### actions that you perform on channels
 
     @channelscores.command(name="track")
@@ -216,19 +279,11 @@ class CScores(commands.Cog):
         if not channels:
             return await ctx.send("no channels or categories to add")
 
-        text_channels = []
-        categories = []
-
-        [text_channels.append(tc) for tc in channels if type(tc) is discord.TextChannel]
-        [
-            categories.append(cat)
-            for cat in channels
-            if type(cat) is discord.CategoryChannel
-        ]
+        sorted_channels = self.sort_catchan(self, channels)
 
         async with self.config.guild(ctx.guild)() as settings:
             # add untracked categories
-            for category in categories:
+            for category in sorted_channels["categories"]:
                 if str(category.id) not in settings["categories"]:
                     settings["categories"][str(category.id)] = {
                         "tracked": True,
@@ -240,7 +295,7 @@ class CScores(commands.Cog):
                 # set all categories to tracked
                 settings["categories"][str(category.id)]["tracked"] = True
 
-            for channel in text_channels:
+            for channel in sorted_channels["text_channels"]:
                 # add untracked channels
                 if str(channel.id) not in settings["scoreboard"]:
                     settings["scoreboard"][str(channel.id)] = {
@@ -259,9 +314,9 @@ class CScores(commands.Cog):
             self,
             ctx,
             title="scores - channels tracked",
-            description="""
-            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            description=f"""
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
             added by {ctx.author.mention}""",
         )
 
@@ -273,23 +328,15 @@ class CScores(commands.Cog):
     ):
         """untrack channels and categories"""
 
-        text_channels = []
-        categories = []
-
-        [text_channels.append(tc) for tc in channels if type(tc) is discord.TextChannel]
-        [
-            categories.append(cat)
-            for cat in channels
-            if type(cat) is discord.CategoryChannel
-        ]
+        sorted_channels = self.sort_catchan(self, channels)
 
         async with self.config.guild(ctx.guild)() as settings:
             # add untracked categories
-            for category in categories:
+            for category in sorted_channels["categories"]:
                 # set all categories to untracked
                 settings["categories"][str(category.id)]["tracked"] = False
 
-            for channel in text_channels:
+            for channel in sorted_channels["text_channels"]:
                 # set all channels to untracked
                 settings["scoreboard"][str(channel.id)]["tracked"] = False
 
@@ -297,9 +344,9 @@ class CScores(commands.Cog):
             self,
             ctx,
             title=f"scores - channels untracked",
-            description="""
-            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            description=f"""
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
             added by {ctx.author.mention}""",
         )
 
@@ -334,30 +381,22 @@ class CScores(commands.Cog):
             "are you sure you want to remove these channels and categories from the scoreboard?"
         )
 
-        cont = await self.confirm_message()
+        cont = await self.confirm_message(ctx)
 
         if not cont:
             return await ctx.send("cancelled")
 
-        text_channels = []
-        categories = []
-
-        [text_channels.append(tc) for tc in channels if type(tc) is discord.TextChannel]
-        [
-            categories.append(cat)
-            for cat in channels
-            if type(cat) is discord.CategoryChannel
-        ]
+        sorted_channels = self.sort_catchan(self, channels)
 
         async with self.config.guild(ctx.guild)() as settings:
             # add untracked categories
-            for category in categories:
+            for category in sorted_channels["categories"]:
                 try:
                     del settings["categories"][str(category.id)]
                 except:
                     pass
 
-            for channel in text_channels:
+            for channel in sorted_channels["text_channels"]:
                 try:
                     del settings["scoreboard"][str(channel.id)]
                 except:
@@ -368,8 +407,8 @@ class CScores(commands.Cog):
             ctx,
             title=f"scores - channels removed",
             description=f"""
-            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
             removed by {ctx.author.mention}""",
         )
 
@@ -552,13 +591,13 @@ class CScores(commands.Cog):
         await self.config.guild(ctx.guild).range.set(new_range)
         return await ctx.tick()
 
-    @settings.group(name="move", aliases=["sync"])
-    async def move(self, ctx):
-        """disable or enable channel movement"""
+    @settings.group(name="sync")
+    async def sync(self, ctx):
+        """disable or enable channel sync to scoreboard"""
 
-    @move.command(name="enable")
-    async def move_enable(self, ctx: commands.Context):
-        """enable channel movement"""
+    @sync.command(name="enable")
+    async def sync_enable(self, ctx: commands.Context):
+        """enable channel sync to scoreboard"""
 
         await self.log_to_channel(
             self,
@@ -569,12 +608,12 @@ class CScores(commands.Cog):
             """,
         )
 
-        await self.config.guild(ctx.guild).move_enabled.set(True)
+        await self.config.guild(ctx.guild).sync.set(True)
         return await ctx.tick()
 
-    @move.command(name="disable")
-    async def move_disable(self, ctx: commands.Context):
-        """disable channel movement"""
+    @sync.command(name="disable")
+    async def sync_disable(self, ctx: commands.Context):
+        """disable channel sync to scoreboard"""
 
         await self.log_to_channel(
             self,
@@ -585,7 +624,7 @@ class CScores(commands.Cog):
             """,
         )
 
-        await self.config.guild(ctx.guild).move_enabled.set(False)
+        await self.config.guild(ctx.guild).sync.set(False)
         return await ctx.tick()
 
     @commands.bot_has_permissions(embed_links=True)
@@ -609,13 +648,14 @@ class CScores(commands.Cog):
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
             **cooldown:** {settings["cooldown"]} minutes
             **grace period:** {settings["grace"]} minutes
+            **range:** {settings["range"]} / 0 to {settings["range"] * len(settings["scoreboard"])} points
+            **sync**: {"enabled" if settings["sync"] else "disabled"}
             **categories:** {
               humanize_list(
                 [f"{ctx.guild.get_channel(int(cat)).name} ({'tracked' if settings['categories'][cat]['tracked'] else 'untracked'})" for cat in settings["categories"]]
               )
               if settings["categories"] else ""}
             **channels:** {len(settings["scoreboard"])} - {untracked_count} not tracked
-            **range:** {settings["range"]} / 0 to {settings["range"] * len(settings["scoreboard"])} points
             """,
             )
         )
@@ -641,7 +681,7 @@ class CScores(commands.Cog):
         scores.sort(key=lambda x: x.score, reverse=True)
 
         scores = [
-            f"{index}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points"
+            f"{index}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points {'*' if scoreboard[str(c.id)]['pinned'] else ''}"
             for index, c in enumerate(scores)
         ]
 
@@ -677,13 +717,16 @@ class CScores(commands.Cog):
                 await ctx.send("this channel is not part of the scoreboard")
                 return
 
+        first_pos = channel.category.text_channels[0].position
+        rank = channel.position - first_pos + 1
+
         return await ctx.send(
             embed=discord.Embed(
-                title=f"{mention} score",
+                title=f"{mention} - #{rank}",
                 color=await ctx.embed_color(),
                 description=f"""
-            **score:** {c["score"]}
-            **pinned:** {"yes" if c["pinned"] is True else "no"}
+            **score:** {c["score"]} points
+            **pinned:** {"yes (rank unreliable)" if c["pinned"] is True else "no"}
             **tracked:** {"yes" if c["tracked"] is True else "no"}
             **added:** {time.ctime(c["added"])}
             """,
