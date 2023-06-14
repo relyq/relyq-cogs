@@ -168,6 +168,10 @@ class CScores(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
+        # check score
+        if await self.config.guild(guild).sync():
+            await self.sync_channels(self, guild)
+
     @commands.Cog.listener("on_guild_channel_delete")
     async def on_channel_delete(self, channel: discord.abc.GuildChannel):
         guild = channel.guild
@@ -229,6 +233,10 @@ class CScores(commands.Cog):
                 ),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
+
+        # check score
+        if await self.config.guild(guild).sync():
+            await self.sync_channels(self, guild)
 
     # points win logic
     @commands.Cog.listener("on_message")
@@ -436,6 +444,10 @@ class CScores(commands.Cog):
         await self.log_tracked(
             self, ctx, sorted_channels["categories"], sorted_channels["text_channels"]
         )
+
+        # check score
+        if await self.config.guild(ctx.guild).sync():
+            await self.sync_channels(self, ctx.guild)
 
         return await ctx.tick()
 
