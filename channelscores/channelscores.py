@@ -143,8 +143,6 @@ class CScores(commands.Cog):
     @commands.Cog.listener("on_guild_channel_create")
     async def on_channel_create(self, channel: discord.abc.GuildChannel):
         guild = channel.guild
-        if await self.config.guild(guild).enabled() is False:
-            return
         if type(channel) is not discord.TextChannel:
             return
 
@@ -206,8 +204,6 @@ class CScores(commands.Cog):
         self, before: discord.TextChannel, after: discord.abc.GuildChannel
     ):
         guild = after.guild
-        if await self.config.guild(guild).enabled() is False:
-            return
         if type(after) is not discord.TextChannel:
             return
 
@@ -489,19 +485,43 @@ class CScores(commands.Cog):
         self,
         ctx: commands.Context,
         *channels: discord.abc.GuildChannel,
-        recursive=False,
+        recursive=True,
     ):
         """reset channel scores"""
-        raise
+        if not channels:
+            return await ctx.send("no channels or categories to reset")
 
         await ctx.send(
             "are you sure you want to reset the scores for these channels and categories?"
         )
 
-        cont = await self.confirm_message()
+        cont = await self.confirm_message(ctx)
 
         if not cont:
             return await ctx.send("cancelled")
+
+        sorted_channels = self.sort_catchan(self, channels, recursive=recursive)
+
+        async with self.config.guild(ctx.guild)() as settings:
+            # reset scores
+            for channel in sorted_channels["text_channels"]:
+                settings["scoreboard"][str(channel.id)]["score"] = 0
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title="scores - channels score reset",
+            description=f"""
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
+            reset by {ctx.author.mention}""",
+        )
+
+        await ctx.tick()
+
+        # check score
+        if await self.config.guild(ctx.guild).sync():
+            return await self.sync_channels(self, ctx.guild)
 
     @channelscores.command(name="forget")
     async def remove_channels(
@@ -740,7 +760,9 @@ class CScores(commands.Cog):
         )
 
         await self.config.guild(ctx.guild).sync.set(True)
-        return await ctx.tick()
+        await ctx.tick()
+
+        return await self.sync_channels(self, ctx.guild)
 
     @sync.command(name="disable")
     async def sync_disable(self, ctx: commands.Context):
@@ -776,11 +798,11 @@ class CScores(commands.Cog):
                 color=await ctx.embed_color(),
                 description=f"""
             **enabled:** {settings["enabled"]}
+            **sync**: {"enabled" if settings["sync"] else "disabled"}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
             **cooldown:** {settings["cooldown"]} minutes
             **grace period:** {settings["grace"]} minutes
             **range:** {settings["range"]} / 0 to {settings["range"] * len(settings["scoreboard"])} points
-            **sync**: {"enabled" if settings["sync"] else "disabled"}
             **categories:** {
               humanize_list(
                 [f"{ctx.guild.get_channel(int(cat)).name} ({'tracked' if settings['categories'][cat]['tracked'] else 'untracked'})" for cat in settings["categories"]]
