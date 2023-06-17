@@ -16,9 +16,24 @@ from redbot.core.utils.predicates import MessagePredicate
 
 
 class CScore_partial:
-    def __init__(self, id, score):
+    def __init__(self, id: int, score: int):
         self.id = id
         self.score = score
+
+    def __eq__(self, other):
+        if isinstance(other, CScore_partial):
+            return self == other
+        if isinstance(other, (int, str)):
+            return int(self.id) == int(other)
+        raise TypeError(
+            "cscore_partial can only be compared to the same object or id (int, str)"
+        )
+
+    def __ne__(self, other):
+        return not self.eq(self, other)
+
+    def __str__(self):
+        return str(self.id)
 
 
 class CScores(commands.Cog):
@@ -70,7 +85,8 @@ class CScores(commands.Cog):
             if categories[category]["tracked"]:
                 category = guild.get_channel(int(category))
                 category.text_channels.sort(key=lambda x: x.position)
-                first_pos = category.text_channels[0].position
+                first_channel = category.text_channels[0]
+                first_pos = first_channel.position
                 pins = []
 
                 for channel in category.text_channels:
@@ -88,17 +104,37 @@ class CScores(commands.Cog):
                 for pin in pins:
                     scores.insert(pin[1], pin[0])
 
-                for rank, chanscore in enumerate(scores):
-                    if scoreboard[str(chanscore.id)]["tracked"]:
-                        channel = guild.get_channel(int(chanscore.id))
-                        if channel.position is not first_pos + rank:
-                            await channel.move(
-                                category=category,
-                                beginning=True,
-                                offset=rank,
-                                reason="channel scores",
+                debug_movelist = [f"first pos is {first_pos}", "moves:"]
+                nl = "\n"
+
+                for channel in category.text_channels:
+                    if scoreboard[str(channel.id)]["tracked"]:
+                        try:
+                            rank = scores.index(channel.id)
+
+                            if channel.position is not first_pos + rank:
+                                debug_movelist.append(
+                                    f"{channel.mention}: {channel.position} to {first_pos + rank}"
+                                )
+
+                                category.text_channels.remove(channel)
+                                category.text_channels.insert(rank, channel)
+
+                                # i dont use .move() as i want abs pos to keep it compatible with official client moves
+                                await channel.edit(
+                                    position=first_pos + rank + 1,
+                                    reason="channel scores",
+                                )
+
+                                await asyncio.sleep(1)  # dont get rate limited
+                        except Exception as e:
+                            await self.bot.get_channel(1087430609695162378).send(
+                                f"{nl.join(debug_movelist)}"
                             )
-                            await asyncio.sleep(0.5)  # dont get rate limited
+                            raise Exception(f"{channel.id} threw") from e
+                await self.bot.get_channel(1087430609695162378).send(
+                    f"{nl.join(debug_movelist)}"
+                )
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
@@ -619,6 +655,25 @@ class CScores(commands.Cog):
         """link categories so they act as one logical volume"""
         raise
 
+    @channelscores.command(name="resync")
+    async def sync_trigger(self, ctx: commands.Context):
+        """triggers a resync"""
+        if not await self.config.guild(ctx.guild).sync():
+            return await ctx.send("sync is not enabled")
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - sync triggered",
+            description=f"""
+              channel sync triggered by {ctx.author.mention}
+            """,
+        )
+
+        await ctx.tick()
+
+        return await self.sync_channels(self, ctx.guild)
+
     ### server settings
 
     @channelscores.group(name="settings", aliases=["set", "s"])
@@ -746,7 +801,7 @@ class CScores(commands.Cog):
     async def sync(self, ctx):
         """disable or enable channel sync to scoreboard"""
 
-    @sync.command(name="enable")
+    @sync.command(name="enable", aliases=["enabled"])
     async def sync_enable(self, ctx: commands.Context):
         """enable channel sync to scoreboard"""
 
@@ -764,7 +819,7 @@ class CScores(commands.Cog):
 
         return await self.sync_channels(self, ctx.guild)
 
-    @sync.command(name="disable")
+    @sync.command(name="disable", aliases=["disabled"])
     async def sync_disable(self, ctx: commands.Context):
         """disable channel sync to scoreboard"""
 
@@ -818,13 +873,22 @@ class CScores(commands.Cog):
     @commands.command(name="scoreboard", aliases=["board", "top"])
     async def view_scoreboard(self, ctx: commands.Context, page=1):
         """view the scoreboard"""
+        if page < 1:
+            return
+
         scoreboard = await self.config.guild(ctx.guild).scoreboard()
 
         page_size = 15
 
-        offset = (page - 1) * page_size
+        total_channels = len(scoreboard)
 
-        total_pages = math.ceil(len(scoreboard) / page_size)
+        total_pages = math.ceil(total_channels / page_size)
+
+        if page > total_pages:
+            await ctx.send(f"there are only {total_pages} pages - showing last page")
+            page = total_pages
+
+        offset = (page - 1) * page_size
 
         scores = []
 
@@ -834,7 +898,7 @@ class CScores(commands.Cog):
         scores.sort(key=lambda x: x.score, reverse=True)
 
         scores = [
-            f"{index}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points {'*' if scoreboard[str(c.id)]['pinned'] else ''}"
+            f"{index + 1}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points {'*' if scoreboard[str(c.id)]['pinned'] else ''}"
             for index, c in enumerate(scores)
         ]
 
@@ -845,10 +909,12 @@ class CScores(commands.Cog):
 
         return await ctx.send(
             embed=discord.Embed(
-                title=f"{ctx.guild.name} scoreboard - {page_size} of {len(scoreboard) - 1}",
+                title=f"{ctx.guild.name} scoreboard - {offset + 1}-{(offset + page_size) if (offset + page_size) < total_channels else total_channels} of {total_channels}",
                 color=await ctx.embed_color(),
                 description=top,
-            ).set_footer(text=f"page {page} of {total_pages}")
+            ).set_footer(
+                text=f"page {page} of {total_pages} - top {page + 1} to go to page {page + 1}"
+            )
         )
 
     @commands.command(name="rank")
