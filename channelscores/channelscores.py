@@ -3,6 +3,8 @@ import datetime
 import math
 import asyncio
 from collections import OrderedDict
+from copy import copy
+from typing import Optional
 
 from operator import attrgetter
 
@@ -34,6 +36,64 @@ class CScore_partial:
 
     def __str__(self):
         return str(self.id)
+
+
+class ChannelScore:
+    def __init__(
+        self,
+        channel: discord.TextChannel,
+        rank: Optional[int] = None,
+        distance: Optional[int] = None,
+    ):
+        self.text_channel = channel
+        self.rank = rank
+        self.distance = distance
+
+
+async def lis_sort(channels, channels_sorted, first_pos):
+    untracked = []
+    for pos, c in enumerate(channels):
+        c.rank = channels_sorted.index(c.text_channel)
+        c.distance = pos - c.rank
+
+    for c in untracked:
+        channels.remove(c)
+
+    chanscore = sorted(channels, key=lambda x: abs(x.distance), reverse=True)[0]
+
+    if chanscore.distance == 0:
+        return
+
+    i = 0
+
+    while True:  # python being python
+        channels.remove(chanscore)
+        channels.insert(chanscore.rank, chanscore)
+
+        move_to = first_pos + chanscore.rank
+        if chanscore.text_channel.position < move_to:
+            move_to += 1
+
+        await chanscore.text_channel.edit(
+            position=move_to,
+            reason="channel scores",
+        )
+
+        await asyncio.sleep(1)
+
+        for pos, c in enumerate(channels):
+            c.rank = channels_sorted.index(c.text_channel)
+            c.distance = pos - c.rank
+
+        chanscore = sorted(channels, key=lambda x: abs(x.distance), reverse=True)[0]
+
+        # prevents infinite looping
+        if i > len(channels_sorted):
+            raise Exception("LIS sort loops exceeded list length")
+        i += 1
+
+        if chanscore.distance == 0:
+            break
 
 
 class CScores(commands.Cog):
@@ -72,14 +132,6 @@ class CScores(commands.Cog):
     async def sync_channels(self, guild: discord.Guild):
         categories = await self.config.guild(guild).categories()
         scoreboard = await self.config.guild(guild).scoreboard()
-        scores = []
-
-        for c in scoreboard:
-            if scoreboard[str(c)]["pinned"]:
-                continue
-            scores.append(CScore_partial(c, scoreboard[str(c)]["score"]))
-
-        scores.sort(key=lambda x: x.score, reverse=True)
 
         for category in categories:
             if categories[category]["tracked"]:
@@ -87,54 +139,27 @@ class CScores(commands.Cog):
                 category.text_channels.sort(key=lambda x: x.position)
                 first_channel = category.text_channels[0]
                 first_pos = first_channel.position
-                pins = []
 
-                for channel in category.text_channels:
-                    if scoreboard[str(channel.id)]["pinned"]:
-                        pins.append(
-                            (
-                                CScore_partial(
-                                    channel.id, scoreboard[str(channel.id)]["score"]
-                                ),
-                                channel.position - first_pos,
-                            )
-                        )
-                pins.sort(key=lambda x: x[1])
-
-                for pin in pins:
-                    scores.insert(pin[1], pin[0])
-
-                debug_movelist = [f"first pos is {first_pos}", "moves:"]
-                nl = "\n"
-
-                for channel in category.text_channels:
-                    if scoreboard[str(channel.id)]["tracked"]:
-                        try:
-                            rank = scores.index(channel.id)
-
-                            if channel.position is not first_pos + rank:
-                                debug_movelist.append(
-                                    f"{channel.mention}: {channel.position} to {first_pos + rank}"
-                                )
-
-                                category.text_channels.remove(channel)
-                                category.text_channels.insert(rank, channel)
-
-                                # i dont use .move() as i want abs pos to keep it compatible with official client moves
-                                await channel.edit(
-                                    position=first_pos + rank + 1,
-                                    reason="channel scores",
-                                )
-
-                                await asyncio.sleep(1)  # dont get rate limited
-                        except Exception as e:
-                            await self.bot.get_channel(1087430609695162378).send(
-                                f"{nl.join(debug_movelist)}"
-                            )
-                            raise Exception(f"{channel.id} threw") from e
-                await self.bot.get_channel(1087430609695162378).send(
-                    f"{nl.join(debug_movelist)}"
+                channels_sorted = sorted(
+                    category.text_channels,
+                    key=lambda x: scoreboard[str(x.id)]["score"],
+                    reverse=True,
                 )
+
+                for c in category.text_channels:
+                    if scoreboard[str(c.id)]["pinned"]:
+                        channels_sorted.remove(c)
+                        channels_sorted.insert(c.position - first_pos, c)
+
+                channels = []
+                for c in category.text_channels:
+                    channels.append(
+                        ChannelScore(
+                            c,
+                        )
+                    )
+
+                await lis_sort(channels, channels_sorted, first_pos)
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
