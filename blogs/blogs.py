@@ -270,6 +270,11 @@ class Blogs(commands.Cog):
                     c["blocked"].remove(user.id)
                 except ValueError:
                     pass
+            if "hidden" in c:
+                try:
+                    c["hidden"].remove(user.id)
+                except ValueError:
+                    pass
 
         await ctx.channel.edit(overwrites=overwrites)
 
@@ -307,6 +312,55 @@ class Blogs(commands.Cog):
             if "shared" in c:
                 try:
                     c["shared"].remove(user.id)
+                except ValueError:
+                    pass
+            if "hidden" in c:
+                try:
+                    c["hidden"].remove(user.id)
+                except ValueError:
+                    pass
+
+        await ctx.channel.edit(overwrites=overwrites)
+
+        return await ctx.tick()
+
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="hide")
+    async def hide_blog(self, ctx: commands.Context, user: discord.Member):
+        """hides ur blog from people"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
+
+        if user is ctx.guild.me:
+            return
+
+        overwrites = ctx.channel.overwrites
+
+        async with self.config.guild(ctx.guild).text.active() as a:
+            c = a[str(ctx.channel.id)]
+            if "hidden" not in c:
+                c["hidden"] = []
+            if user.id not in c["hidden"]:
+                c["hidden"].append(user.id)
+            # set blocked perms
+            overwrites[user] = overwrites.get(user, discord.PermissionOverwrite())
+            overwrites[user].update(
+                view_channel=False,
+                manage_messages=None,
+                send_messages=False,
+                add_reactions=False,
+            )
+            if "shared" in c:
+                try:
+                    c["shared"].remove(user.id)
+                except ValueError:
+                    pass
+            if "blocked" in c:
+                try:
+                    c["blocked"].remove(user.id)
                 except ValueError:
                     pass
 
@@ -357,6 +411,32 @@ class Blogs(commands.Cog):
             if "blocked" in c:
                 try:
                     c["blocked"].remove(user.id)
+                    # remove user overwrite
+                    overwrites.pop(user, None)
+                except ValueError:
+                    pass
+
+        await ctx.channel.edit(overwrites=overwrites)
+
+        return await ctx.tick()
+
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @blog.command(name="unhide")
+    async def unhide_blog(self, ctx: commands.Context, user: discord.Member):
+        """unhide ur blog from people"""
+        active = await self.config.guild(ctx.guild).text.active()
+        active_author = [int(c) for c in active if active[c]["owner"] == ctx.author.id]
+
+        if ctx.channel.id not in active_author:
+            return
+
+        overwrites = ctx.channel.overwrites
+
+        async with self.config.guild(ctx.guild).text.active() as a:
+            c = a[str(ctx.channel.id)]
+            if "hidden" in c:
+                try:
+                    c["hidden"].remove(user.id)
                     # remove user overwrite
                     overwrites.pop(user, None)
                 except ValueError:
