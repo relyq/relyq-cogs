@@ -1,6 +1,8 @@
 import asyncio
 import datetime
 import time
+from typing import Optional
+
 
 import discord
 
@@ -738,11 +740,16 @@ class Blogs(commands.Cog):
     @commands.bot_has_permissions(embed_links=True)
     @commands.cooldown(1, 10, commands.BucketType.user)
     @settings.command(name="view", aliases=["v"])
-    async def view_blog_settings(self, ctx: commands.Context):
+    async def view_blog_settings(
+        self, ctx: commands.Context, blog: Optional[discord.TextChannel]
+    ):
         """view your blog's settings"""
         active = await self.config.guild(ctx.guild).text.active()
 
-        settings = active[str(ctx.channel.id)]
+        if not blog:
+            blog = ctx.channel
+
+        settings = active[str(blog.id)]
 
         private = False
         shared = []
@@ -766,11 +773,11 @@ class Blogs(commands.Cog):
                 title="blog settings",
                 color=await ctx.embed_color(),
                 description=f"""
-              **name:** {ctx.channel.name}
-              **topic:** {ctx.channel.topic}
+              **name:** {blog.name}
+              **topic:** {blog.topic}
               **private:** {"enabled" if private else "disabled"}
-              **nsfw:** {"enabled" if ctx.channel.nsfw else "disabled"}
-              **slowmode:** {ctx.channel.slowmode_delay or "disabled"}
+              **nsfw:** {"enabled" if blog.nsfw else "disabled"}
+              **slowmode:** {blog.slowmode_delay or "disabled"}
               **shared users:** {humanize_list(shared) or None}
               **blocked users:** {humanize_list(blocked) or None}
               **created**: {time.ctime(settings["created"])}
@@ -1114,44 +1121,7 @@ class Blogs(commands.Cog):
         self, ctx: commands.Context, blog: discord.TextChannel
     ):
         """view settings for a blog"""
-        active = await self.config.guild(ctx.guild).text.active()
-
-        settings = active[str(blog.id)]
-
-        private = False
-        shared = []
-        blocked = []
-
-        try:
-            shared = [ctx.guild.get_member(u) for u in settings["shared"]]
-        except KeyError:
-            pass
-        try:
-            blocked = [ctx.guild.get_member(u) for u in settings["blocked"]]
-        except KeyError:
-            pass
-        try:
-            private = settings["private"]
-        except KeyError:
-            pass
-
-        return await ctx.send(
-            embed=discord.Embed(
-                title=f"blog settings for {blog.mention}",
-                color=await ctx.embed_color(),
-                description=f"""
-              **name:** {blog.name}
-              **topic:** {blog.topic}
-              **owner:** {ctx.guild.get_member(settings["owner"])}
-              **private:** {"enabled" if private else "disabled"}
-              **nsfw:** {"enabled" if blog.nsfw else "disabled"}
-              **slowmode:** {blog.slowmode_delay or "disabled"}
-              **shared users:** {humanize_list(shared) or None}
-              **blocked users:** {humanize_list(blocked) or None}
-              **created**: {time.ctime(settings["created"])}
-            """,
-            )
-        )
+        return await self.view_blog_settings(ctx, blog=blog)
 
     @blogsset.command(name="clear")
     async def _text_clear(self, ctx: commands.Context):
@@ -1171,7 +1141,9 @@ class Blogs(commands.Cog):
 
         await ctx.send("starting resync")
 
-        err = ["AttributeError exception ignored for channels - some of the blog members might not be in the server: "]
+        err = [
+            "AttributeError exception ignored for channels - some of the blog members might not be in the server: "
+        ]
 
         for chan in active:
             try:
@@ -1264,7 +1236,7 @@ class Blogs(commands.Cog):
                 err.append(f"{channel.mention}")
 
         if len(err) > 1:
-            nl = '\n'
+            nl = "\n"
             await ctx.send(f"{nl.join(err)}")
 
         return await ctx.tick()
