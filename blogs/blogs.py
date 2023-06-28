@@ -1171,6 +1171,8 @@ class Blogs(commands.Cog):
 
         await ctx.send("starting resync")
 
+        err = ["AttributeError exception ignored for channels - some of the blog members might not be in the server: "]
+
         for chan in active:
             try:
                 c = active[chan]
@@ -1259,8 +1261,10 @@ class Blogs(commands.Cog):
                     "couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs."
                 )
             except AttributeError as e:
-                await ctx.send(
-                    f"AttributeError exception ignored for channel {channel.mention}: {e}\nsome of the blog members might not be in the server"
-                )
+                err.append(f"{channel.mention}")
+
+        if len(err) > 1:
+            nl = '\n'
+            await ctx.send(f"{nl.join(err)}")
 
         return await ctx.tick()
