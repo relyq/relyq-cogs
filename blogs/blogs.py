@@ -749,7 +749,10 @@ class Blogs(commands.Cog):
         if not blog:
             blog = ctx.channel
 
-        settings = active[str(blog.id)]
+        try:
+            settings = active[str(blog.id)]
+        except KeyError:
+            return await ctx.send(f"{ctx.channel.mention} is not a blog")
 
         private = False
         shared = []
