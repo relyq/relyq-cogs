@@ -783,6 +783,7 @@ class Blogs(commands.Cog):
                 description=f"""
               **name:** {blog.name}
               **topic:** {blog.topic}
+              **owner:** {ctx.guild.get_member(int(settings["owner"])).mention}
               **private:** {"enabled" if private else "disabled"}
               **nsfw:** {"enabled" if blog.nsfw else "disabled"}
               **slowmode:** {blog.slowmode_delay or "disabled"}
