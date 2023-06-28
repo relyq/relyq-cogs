@@ -757,6 +757,7 @@ class Blogs(commands.Cog):
         private = False
         shared = []
         blocked = []
+        hidden = []
 
         try:
             shared = [ctx.guild.get_member(u) for u in settings["shared"]]
@@ -764,6 +765,10 @@ class Blogs(commands.Cog):
             pass
         try:
             blocked = [ctx.guild.get_member(u) for u in settings["blocked"]]
+        except KeyError:
+            pass
+        try:
+            hidden = [ctx.guild.get_member(u) for u in settings["hidden"]]
         except KeyError:
             pass
         try:
@@ -783,6 +788,7 @@ class Blogs(commands.Cog):
               **slowmode:** {blog.slowmode_delay or "disabled"}
               **shared users:** {humanize_list(shared) or None}
               **blocked users:** {humanize_list(blocked) or None}
+              **hidden users:** {humanize_list(hidden) or None}
               **created**: {time.ctime(settings["created"])}
             """,
             )
