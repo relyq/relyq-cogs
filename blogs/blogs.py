@@ -1026,6 +1026,9 @@ class Blogs(commands.Cog):
     @roles.command(name="add")
     async def roles_add(self, ctx: commands.Context, *roles: discord.Role):
         """add a role allowed to the list"""
+        if not roles:
+            return await ctx.send("no roles to add")
+
         set_roles = await self.config.guild(ctx.guild).text.roles()
 
         for r in roles:
@@ -1038,6 +1041,9 @@ class Blogs(commands.Cog):
     @roles.command(name="remove")
     async def roles_remove(self, ctx: commands.Context, *roles: discord.Role):
         """add a role allowed to the list"""
+        if not roles:
+            return await ctx.send("no roles to remove")
+
         set_roles = await self.config.guild(ctx.guild).text.roles()
 
         for r in roles:
@@ -1171,7 +1177,9 @@ class Blogs(commands.Cog):
 
         await ctx.send("starting resync")
 
-        err = ["AttributeError exception ignored for channels - some of the blog members might not be in the server: "]
+        err = [
+            "AttributeError exception ignored for channels - some of the blog members might not be in the server: "
+        ]
 
         for chan in active:
             try:
@@ -1264,7 +1272,7 @@ class Blogs(commands.Cog):
                 err.append(f"{channel.mention}")
 
         if len(err) > 1:
-            nl = '\n'
+            nl = "\n"
             await ctx.send(f"{nl.join(err)}")
 
         return await ctx.tick()
