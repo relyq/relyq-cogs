@@ -116,9 +116,13 @@ class CScores(commands.Cog):
 
         for category in categories:
             if categories[category]["tracked"]:
-                category = guild.get_channel(int(category))
-                category.text_channels.sort(key=lambda x: x.position)
-                first_channel = category.text_channels[0]
+                try:
+                    category = guild.get_channel(int(category))
+                    category.text_channels.sort(key=lambda x: x.position)
+                    first_channel = category.text_channels[0]
+                except IndexError:
+                    continue
+
                 first_pos = first_channel.position
 
                 channels_sorted = sorted(
