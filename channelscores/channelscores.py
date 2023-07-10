@@ -17,37 +17,18 @@ from redbot.core.utils.chat_formatting import humanize_list
 from redbot.core.utils.predicates import MessagePredicate
 
 
-class CScore_partial:
-    def __init__(self, id: int, score: int):
-        self.id = id
-        self.score = score
-
-    def __eq__(self, other):
-        if isinstance(other, CScore_partial):
-            return self == other
-        if isinstance(other, (int, str)):
-            return int(self.id) == int(other)
-        raise TypeError(
-            "cscore_partial can only be compared to the same object or id (int, str)"
-        )
-
-    def __ne__(self, other):
-        return not self.eq(self, other)
-
-    def __str__(self):
-        return str(self.id)
-
-
 class ChannelScore:
     def __init__(
         self,
         channel: discord.TextChannel,
         rank: Optional[int] = None,
         distance: Optional[int] = None,
+        score: Optional[int] = None,
     ):
         self.text_channel = channel
         self.rank = rank
         self.distance = distance
+        self.score = score
 
 
 async def lis_sort(channels, channels_sorted, first_pos):
@@ -918,12 +899,16 @@ class CScores(commands.Cog):
         scores = []
 
         for c in scoreboard:
-            scores.append(CScore_partial(c, scoreboard[str(c)]["score"]))
+            scores.append(
+                ChannelScore(
+                    ctx.guild.get_channel(int(c)), score=scoreboard[str(c)]["score"]
+                )
+            )
 
         scores.sort(key=lambda x: x.score, reverse=True)
 
         scores = [
-            f"{index + 1}. {ctx.guild.get_channel(int(c.id)).mention} - {c.score} points {'*' if scoreboard[str(c.id)]['pinned'] else ''}"
+            f"{index + 1}. {c.text_channel.mention} - {c.score} points {'*' if scoreboard[str(c.text_channel.id)]['pinned'] else ''}"
             for index, c in enumerate(scores)
         ]
 
