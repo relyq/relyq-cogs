@@ -461,9 +461,12 @@ class CScores(commands.Cog):
     ):
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == ctx.guild.id)
-            log_channel = ctx.guild.get_channel(
-                session.scalars(stmt).first().log_channel
-            )
+            try:
+                log_channel = ctx.guild.get_channel(
+                    session.scalars(stmt).first().log_channel
+                )
+            except AttributeError:
+                return
 
         if log_channel:
             await log_channel.send(
