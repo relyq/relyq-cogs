@@ -53,10 +53,12 @@ class Volume:
         )
 
 
-async def lis_sort(channels, channels_sorted, first_pos):
+async def lis_sort(
+    channels: List[ChannelScore], channels_sorted: List[Channel], first_pos
+):
     untracked = []
     for pos, c in enumerate(channels):
-        c.rank = channels_sorted.index(c.text_channel)
+        c.rank = channels_sorted.index(c.text_channel.id)
         c.distance = pos - c.rank
 
     for c in untracked:
@@ -85,7 +87,7 @@ async def lis_sort(channels, channels_sorted, first_pos):
         await asyncio.sleep(1)
 
         for pos, c in enumerate(channels):
-            c.rank = channels_sorted.index(c.text_channel)
+            c.rank = channels_sorted.index(c.text_channel.id)
             c.distance = pos - c.rank
 
         chanscore = sorted(channels, key=lambda x: abs(x.distance), reverse=True)[0]
@@ -194,39 +196,53 @@ class CScores(commands.Cog):
 
     @staticmethod
     async def sync_channels(self, guild: discord.Guild):
-        categories = await self.config.guild(guild).categories()
-        scoreboard = await self.config.guild(guild).scoreboard()
+        with Session(self.engine) as session:
+            stmt = select(Category).where(Category.guild_id == guild.id)
+            categories = session.scalars(stmt).all()
 
         for category in categories:
-            if categories[category]["tracked"]:
-                try:
-                    category = guild.get_channel(int(category))
-                    category.text_channels.sort(key=lambda x: x.position)
-                    first_channel = category.text_channels[0]
-                except IndexError:
-                    continue
-                first_pos = first_channel.position
+            # get the first position
+            try:
+                category = guild.get_channel(category.id)
+                category.text_channels.sort(key=lambda x: x.position)
+                first_channel = category.text_channels[0]
+            except IndexError:
+                continue
+            first_pos = first_channel.position
 
-                channels_sorted = sorted(
-                    category.text_channels,
-                    key=lambda x: scoreboard[str(x.id)]["score"],
-                    reverse=True,
+            with Session(self.engine) as session:
+                # get scoreboard
+                stmt = (
+                    select(Channel)
+                    .where(Channel.id.in_([c.id for c in category.text_channels]))
+                    .order_by(Channel.score.desc(), Channel.updated.desc())
                 )
 
-                for c in category.text_channels:
-                    if scoreboard[str(c.id)]["pinned"]:
-                        channels_sorted.remove(c)
-                        channels_sorted.insert(c.position - first_pos, c)
+                # without pins
+                stmt = stmt.where(Channel.pinned == False)
+                scoreboard = session.scalars(stmt).all()
+                # get pins
+                stmt = stmt.where(Channel.pinned == True)
+                pins = session.scalars(stmt).all()
 
-                channels = []
-                for c in category.text_channels:
-                    channels.append(
-                        ChannelScore(
-                            c,
-                        )
+            # sort pinned
+            for p in pins:
+                scoreboard.insert(guild.get_channel(p.id).position - first_pos, p)
+
+            for c in scoreboard:
+                c.text_channel = guild.get_channel(c.id)
+
+            # cast to ChannelScore
+            channels = []
+            for c in category.text_channels:
+                channels.append(
+                    ChannelScore(
+                        c,
                     )
+                )
 
-                await lis_sort(channels, channels_sorted, first_pos)
+            # finally sync sort to discord
+            await lis_sort(channels, scoreboard, first_pos)
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
@@ -392,69 +408,90 @@ class CScores(commands.Cog):
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
-        if await self.config.guild(message.guild).enabled() is False:
-            return
-        if message.author.id is message.guild.me.id:
-            return
-        async with self.config.guild(message.guild).scoreboard() as scoreboard:
-            if str(message.channel.id) not in scoreboard:
+        with Session(self.engine) as session:
+            stmt = select(Guild).where(Guild.id == message.guild.id)
+            guild = session.scalars(stmt).first()
+            if guild.enabled is False:
+                return
+            if message.author.id is message.guild.me.id:
+                return
+
+            stmt = select(Channel).where(Channel.id == message.channel.id)
+
+            channel = session.scalars(stmt).first()
+
+            if not channel:
                 return
 
             ## add points
-            if scoreboard[str(message.channel.id)]["tracked"]:
-                cooldown_sec = await self.config.guild(message.guild).cooldown() * 60
+            if channel.tracked:
+                cooldown_sec = guild.cooldown * 60
 
-                since_update = (
-                    time.time() - scoreboard[str(message.channel.id)]["updated"]
+                since_update = datetime.now(timezone.utc) - channel.updated.astimezone(
+                    timezone.utc
                 )
 
                 # check cooldown - if grace is over 0 update doesnt matter
                 # if update is low & grace 0 = recent message
                 # if update is low & grace > 0 = recently lost points
-                if scoreboard[str(message.channel.id)]["grace_count"] == 0:
-                    if since_update <= cooldown_sec:
+                if channel.grace_count == 0:
+                    if abs(since_update.total_seconds()) <= cooldown_sec:
                         return
 
-                points_max = await self.config.guild(message.guild).range() * len(
-                    scoreboard
+                total_channels = (
+                    session.query(Channel).where(Channel.guild_id == guild.id).count()
                 )
 
-                # add points & update last message time
-                if scoreboard[str(message.channel.id)]["score"] < points_max:
-                    scoreboard[str(message.channel.id)]["score"] += 1
-                scoreboard[str(message.channel.id)]["updated"] = time.time()
-                scoreboard[str(message.channel.id)]["grace_count"] = 0
+                points_max = guild.range * total_channels
 
-            # check score
-            if await self.config.guild(message.guild).sync():
-                await self.sync_channels(self, message.guild)
+                # add points & update last message time
+                if channel.score < points_max:
+                    channel.score += 1
+                channel.updated = datetime.now(timezone.utc)
+                channel.grace_count = 0
+
+                session.commit()
+
+                # check score
+                if guild.sync:
+                    await self.sync_channels(self, message.guild)
 
     # points lose logic
     @tasks.loop(minutes=__global_grace__)
     async def main_loop(self):
-        for g in await self.config.all_guilds():
-            async with self.config.guild_from_id(g)() as settings:
-                if settings["enabled"] is False:
+        with Session(self.engine) as session:
+            stmt = select(Guild)
+            guilds = session.scalars(stmt).all()
+            for g in guilds:
+                if not g.enabled:
                     return
-                for c in settings["scoreboard"]:
-                    if settings["scoreboard"][c]["tracked"]:
-                        since_update = int(
-                            (time.time() - settings["scoreboard"][c]["updated"]) / 60
-                        )
 
-                        if since_update >= settings["grace"]:  # grace ended
-                            if settings["scoreboard"][c]["score"] > 0:
-                                settings["scoreboard"][c]["score"] -= (
-                                    1 if settings["scoreboard"][c]["grace_count"] else 0
+                stmt = select(Channel).where(Channel.guild_id == g.id)
+                channels = session.scalars(stmt).all()
+
+                for c in channels:
+                    if not c.tracked:
+                        return
+
+                    since_update = datetime.now(timezone.utc) - c.updated.astimezone(
+                        timezone.utc
+                    )
+
+                    if (
+                        abs(int(since_update.total_seconds())) / 60 >= g.grace
+                    ):  # grace ended
+                        if c.score > 0:
+                            c.score -= 1 if c.grace_count else 0
+                            if g.sync:
+                                await self.sync_channels(
+                                    self,
+                                    self.bot.get_guild(g.id),
                                 )
-                                if settings["sync"]:
-                                    await self.sync_channels(
-                                        self,
-                                        self.bot.get_guild(int(g)),
-                                    )
 
-                            settings["scoreboard"][c]["updated"] = time.time()
-                            settings["scoreboard"][c]["grace_count"] += 1
+                        c.updated = datetime.now(timezone.utc)
+                        c.grace_count += 1
+
+                        session.commit()
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.group(
@@ -951,8 +988,11 @@ class CScores(commands.Cog):
     @channelscores.command(name="resync")
     async def sync_trigger(self, ctx: commands.Context):
         """triggers a resync"""
-        if not await self.config.guild(ctx.guild).sync():
-            return await ctx.send("sync is not enabled")
+        with Session(self.engine) as session:
+            stmt = select(Guild).where(Guild.id == ctx.guild.id)
+            guild = session.scalars(stmt).first()
+            if not guild.sync:
+                return await ctx.send("sync is not enabled")
 
         await self.log_to_channel(
             self,
@@ -1187,6 +1227,8 @@ class CScores(commands.Cog):
 
         page_size = 15
 
+        max_pages_msg = None
+
         with Session(self.engine) as session:
             total_channels = (
                 session.query(Channel).where(Channel.guild_id == ctx.guild.id).count()
@@ -1208,7 +1250,7 @@ class CScores(commands.Cog):
                 .where(Channel.guild_id == ctx.guild.id)
                 .offset(offset)
                 .limit(page_size)
-                .order_by(Channel.score.desc())
+                .order_by(Channel.score.desc(), Channel.updated.desc())
             )
 
             scoreboard = session.scalars(stmt).all()
@@ -1229,7 +1271,7 @@ class CScores(commands.Cog):
         top = f"{nl.join(scores)}"
 
         return await ctx.send(
-            content=max_pages_msg if max_pages_msg else None,
+            content=max_pages_msg,
             embed=discord.Embed(
                 title=f"{ctx.guild.name} scoreboard - {offset + 1}-{(offset + page_size) if (offset + page_size) < total_channels else total_channels} of {total_channels}",
                 color=await ctx.embed_color(),
