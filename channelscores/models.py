@@ -18,7 +18,8 @@ class Channel(Base):
     __tablename__ = "channel"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    guild_id: Mapped[int]
+    guild_id: Mapped[int] = mapped_column(ForeignKey("guild.id", ondelete="CASCADE"))
+    guild: Mapped["Guild"] = relationship(back_populates="channels")
     score: Mapped[int]
     grace_count: Mapped[int]
     pinned: Mapped[bool]
@@ -31,7 +32,8 @@ class Category(Base):
     __tablename__ = "category"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    guild_id: Mapped[int]
+    guild_id: Mapped[int] = mapped_column(ForeignKey("guild.id", ondelete="CASCADE"))
+    guild: Mapped["Guild"] = relationship(back_populates="categories")
     volume: Mapped[str] = mapped_column(String(8))
     volume_pos: Mapped[int]
     added: Mapped[datetime]
@@ -46,6 +48,12 @@ class Guild(Base):
     __tablename__ = "guild"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    channels: Mapped[Optional[List["Channel"]]] = relationship(
+        back_populates="guild", cascade="all, delete", passive_deletes=True
+    )
+    categories: Mapped[Optional[List["Category"]]] = relationship(
+        back_populates="guild", cascade="all, delete", passive_deletes=True
+    )
     enabled: Mapped[bool]
     sync: Mapped[bool]
     cooldown: Mapped[int]
