@@ -274,15 +274,26 @@ class CScores(commands.Cog):
         if type(channel) is not discord.TextChannel:
             return
 
-        categories = await self.config.guild(guild).categories()
+        with Session(self.engine) as session:
+            stmt = select(Category).where(Category.id == channel.category.id)
 
-        if str(channel.category.id) not in categories:
-            return
+            if not session.scalars(stmt).first():
+                return
 
-        async with self.config.guild(guild)() as settings:
-            self._add_textchannel(self, str(channel.id), settings)
+            self._add_textchannel(self, session, channel)
+            session.commit()
 
-        log_channel = guild.get_channel(await self.config.guild(guild).log_channel())
+            # i could load guild from the child channel
+            stmt = select(Guild).where(Guild.id == guild.id)
+            guild = session.scalars(stmt).first()
+            try:
+                log_channel = guild.get_channel(guild.log_channel)
+            except AttributeError:
+                return
+
+            # check score
+            if guild.sync:
+                await self.sync_channels(self, guild)
 
         if log_channel:
             await log_channel.send(
@@ -294,10 +305,6 @@ class CScores(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
-        # check score
-        if await self.config.guild(guild).sync():
-            await self.sync_channels(self, guild)
-
     @commands.Cog.listener("on_guild_channel_delete")
     async def on_channel_delete(self, channel: discord.abc.GuildChannel):
         guild = channel.guild
@@ -308,14 +315,24 @@ class CScores(commands.Cog):
         ):
             return
 
-        async with self.config.guild(guild)() as settings:
+        with Session(self.engine) as session:
             if type(channel) is discord.CategoryChannel:
-                del settings["categories"][str(channel.id)]
+                stmt = select(Category).where(Category.id == channel.id)
 
             if type(channel) is discord.TextChannel:
-                del settings["scoreboard"][str(channel.id)]
+                stmt = select(Channel).where(Channel.id == channel.id)
 
-        log_channel = guild.get_channel(await self.config.guild(guild).log_channel())
+            session.delete(session.scalars(stmt).first())
+            session.commit()
+
+            # i could load guild from the child channel
+            stmt = select(Guild).where(Guild.id == guild.id)
+            try:
+                log_channel = guild.get_channel(
+                    session.scalars(stmt).first().log_channel
+                )
+            except AttributeError:
+                return
 
         if log_channel:
             await log_channel.send(
@@ -335,18 +352,32 @@ class CScores(commands.Cog):
         if type(after) is not discord.TextChannel:
             return
 
-        categories = await self.config.guild(guild).categories()
+        with Session(self.engine) as session:
+            # in tracked category
+            stmt = select(Category).where(Category.id == before.category.id)
+            if session.scalars(stmt).first():
+                return
 
-        if str(before.category.id) in categories:
-            return
-        if str(after.category.id) not in categories:
-            return
+            # in untracked category
+            stmt = select(Category).where(Category.id == after.category.id)
+            if not session.scalars(stmt).first():
+                return
 
-        # text channel moved to a tracked category - lets try to track it
-        async with self.config.guild(guild)() as settings:
-            self._add_textchannel(self, str(after.id), settings)
+            # text channel moved to a tracked category - lets try to track it
+            self._add_textchannel(self, session, after)
+            session.commit()
 
-        log_channel = guild.get_channel(await self.config.guild(guild).log_channel())
+            # i could load guild from the child channel
+            stmt = select(Guild).where(Guild.id == guild.id)
+            guild = session.scalars(stmt).first()
+            try:
+                log_channel = guild.get_channel(guild.log_channel)
+            except AttributeError:
+                return
+
+            # check score
+            if guild.sync:
+                await self.sync_channels(self, guild)
 
         if log_channel:
             await log_channel.send(
@@ -357,10 +388,6 @@ class CScores(commands.Cog):
                 ),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
-
-        # check score
-        if await self.config.guild(guild).sync():
-            await self.sync_channels(self, guild)
 
     # points win logic
     @commands.Cog.listener("on_message")
@@ -548,6 +575,24 @@ class CScores(commands.Cog):
                         if tc not in channels["text_channels"]:
                             channels["text_channels"].append(tc)
         return channels
+
+    @staticmethod
+    def _add_textchannel(self, session, channel: discord.TextChannel):
+        stmt = select(Channel).where(Channel.id == channel.id)
+        if not session.scalars(stmt).first():
+            now = datetime.now(timezone.utc)
+            session.add(
+                Channel(
+                    id=channel.id,
+                    guild_id=channel.guild.id,
+                    score=0,
+                    grace_count=0,
+                    pinned=False,
+                    tracked=True,
+                    updated=now,
+                    added=now,
+                )
+            )
 
     @staticmethod
     def get_volumes(self, categories: dict) -> list:
