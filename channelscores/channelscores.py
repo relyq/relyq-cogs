@@ -143,25 +143,22 @@ class CScores(commands.Cog):
         self.main_loop.cancel()
 
     @staticmethod
-    def init_guild(self, guild: discord.Guild):
+    def init_guild(self, session: Session, guild: discord.Guild):
         """initialize guild on sqlite"""
-        with Session(self.engine) as session:
-            stmt = select(Guild).where(Guild.id == guild.id)
-            if not session.scalars(stmt).first():
-                session.add(
-                    Guild(
-                        id=guild.id,
-                        enabled=False,
-                        sync=False,
-                        cooldown=self.DEFAULT_COOLDOWN,
-                        grace=self.DEFAULT_GRACE,
-                        range=self.DEFAULT_RANGE,
-                        log_channel=None,
-                        added=datetime.now(timezone.utc),
-                    )
+        stmt = select(Guild).where(Guild.id == guild.id)
+        if not session.scalars(stmt).first():
+            session.add(
+                Guild(
+                    id=guild.id,
+                    enabled=False,
+                    sync=False,
+                    cooldown=self.DEFAULT_COOLDOWN,
+                    grace=self.DEFAULT_GRACE,
+                    range=self.DEFAULT_RANGE,
+                    log_channel=None,
+                    added=datetime.now(timezone.utc),
                 )
-
-                session.commit()
+            )
 
     @staticmethod
     def update_guild(
@@ -174,9 +171,9 @@ class CScores(commands.Cog):
         range: Optional[int] = None,
         log_channel: Optional[discord.TextChannel] = None,
     ):
-        self.init_guild(self, guild)
-
+        """init & update guild settings"""
         with Session(self.engine) as session:
+            self.init_guild(self, session, guild)
             stmt = select(Guild).where(Guild.id == guild.id)
             guild = session.scalars(stmt).first()
             if enabled is not None:
@@ -411,6 +408,8 @@ class CScores(commands.Cog):
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == message.guild.id)
             guild = session.scalars(stmt).first()
+            if not guild:
+                return
             if guild.enabled is False:
                 return
             if message.author.id is message.guild.me.id:
@@ -991,6 +990,8 @@ class CScores(commands.Cog):
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == ctx.guild.id)
             guild = session.scalars(stmt).first()
+            if not guild:
+                return
             if not guild.sync:
                 return await ctx.send("sync is not enabled")
 
