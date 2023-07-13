@@ -37,22 +37,6 @@ class ChannelScore:
         self.score = score
 
 
-class Volume:
-    def __init__(self, id: int, previous: int = None, next: int = None):
-        self.id = id
-        self.previous = previous
-        self.next = next
-
-    def __eq__(self, other):
-        if isinstance(other, Volume):
-            return self is other
-        if isinstance(other, int) or isinstance(other, str):
-            return self.id == int(other)
-        raise TypeError(
-            "volume can only be compared to the same object or id (int, str)"
-        )
-
-
 async def lis_sort(
     channels: List[ChannelScore], channels_sorted: List[Channel], first_pos
 ):
@@ -571,6 +555,7 @@ class CScores(commands.Cog):
 
     @staticmethod
     async def log_unlinked(self, ctx, volumes):
+        raise
         arrow = " -/> "
         nl = "\n"
         await self.log_to_channel(
@@ -579,7 +564,7 @@ class CScores(commands.Cog):
             title="scores - categories unlinked",
             description=f"""
             logical volume split
-            {nl.join([[arrow.join(str(vid)) for vid in vol] for vol in volumes])}
+            {nl.join([arrow.join(str(vol_id)) for vol in volumes])}
             by {ctx.author.mention}""",
         )
 
@@ -631,44 +616,14 @@ class CScores(commands.Cog):
             )
 
     @staticmethod
+    def _get_volume_hash(self, categories: List[discord.CategoryChannel]) -> str:
+        return shake_128(
+            bytes("".join([str(c.id) for c in categories]), "utf-8")
+        ).hexdigest(8)
+
+    @staticmethod
     def get_volumes(self, categories: dict) -> list:
-        volumes = []
-
-        cats = []
-        [
-            cats.append(
-                Volume(
-                    int(c),
-                    categories[str(c)]["previous"],
-                    categories[str(c)]["next"],
-                )
-            )
-            for c in categories
-        ]
-
-        while True:
-            volume = []
-            volume.append(cats[-1])
-            print(f"popped {volume[-1]}")
-            while True:
-                nxt = volume[-1].next
-                if nxt:
-                    volume.append(cats.pop(nxt))
-                else:
-                    break
-            while True:
-                prev = volume[0].previous
-                if nxt:
-                    volume.insert(0, cats.pop(prev))
-                else:
-                    break
-
-            volumes.append(volume)
-
-            if not len(categories):
-                break
-
-        return volumes
+        pass
 
     ### actions that you perform on channels
 
@@ -691,7 +646,7 @@ class CScores(commands.Cog):
                 Category(
                     id=category.id,
                     guild_id=ctx.guild.id,
-                    volume=shake_128(bytes(str(category.id), "utf-8")).hexdigest(8),
+                    volume=self._get_volume_hash(self, [category]),
                     volume_pos=0,
                     added=now,
                 )
@@ -935,52 +890,86 @@ class CScores(commands.Cog):
 
     @channelscores.command(name="link")
     async def link_categories(
-        self, ctx: commands.Context, *volumes: discord.CategoryChannel
+        self, ctx: commands.Context, *categories: discord.CategoryChannel
     ):
         """link categories so they act as one logical volume"""
-        if len(volumes) < 2:
+        if len(categories) < 2:
             return ctx.send("no categories to link")
 
-        async with self.config.guild(ctx.guild).categories() as categories:
-            for i, cat in enumerate(volumes):
-                if i != 0:
-                    categories[str(cat.id)]["previous"] = volumes[i - 1].id
-                if i != len(volumes) - 1:
-                    categories[str(cat.id)]["next"] = volumes[i + 1].id
+        with Session(self.engine) as session:
+            volume: List[Category] = []
+            for cat in categories:
+                stmt = select(Category).where(Category.id == cat.id)
+                c = session.scalars(stmt).first()
 
-        await self.log_linked(self, ctx, volumes)
+                if not c:
+                    return await ctx.send(
+                        f"{cat.name} is not being tracked. please track it first"
+                    )
+
+                if c.volume != self._get_volume_hash(self, [cat]):
+                    return await ctx.send(
+                        f"{cat.name} is already part of a logical volume. please unlink it first"
+                    )
+
+                volume.append(c)
+
+            for i, cat in enumerate(volume):
+                cat.volume = self._get_volume_hash(self, categories)
+                cat.volume_pos = i
+
+            session.commit()
+
+        await self.log_linked(self, ctx, categories)
 
         return await ctx.tick()
 
     @channelscores.command(name="unlink")
     async def unlink_categories(
-        self, ctx: commands.Context, *cats: discord.CategoryChannel
+        self, ctx: commands.Context, *categories: discord.CategoryChannel
     ):
         """break links to split categories"""
-        if not cats:
+        if not categories:
             return ctx.send("no categories to unlink")
 
-        split_vols = []
+        with Session(self.engine) as session:
+            stmt = select(Category).where(
+                Category.id.in_([cat.id for cat in categories])
+            )
+            unlinked_cats = session.scalars(stmt).all()
+            split_vols = set([c.volume for c in unlinked_cats])
 
-        async with self.config.guild(ctx.guild).categories() as categories:
-            volumes_ids = self.get_volumes(self, copy(categories))
-            for cat in cats:
-                for vol in volumes_ids:
-                    if cat.id in vol:
-                        split_vols.append(vol)
+            # recalculate simple volume hash for unlinked cats
+            for cat in unlinked_cats:
+                cat.volume = self._get_volume_hash(self, [cat])
+                cat.volume_pos = 0
 
-                        prev = categories[str(cat.id)]["previous"]
-                        nxt = categories[str(cat.id)]["next"]
+            # heal split volumes
+            for vol in split_vols:
+                # get cats from vol
+                stmt = (
+                    select(Category)
+                    .where(Category.volume == vol)
+                    .order_by(Category.volume_pos)
+                )
+                healed_volume = session.scalars(stmt).all()
 
-                        if prev:
-                            categories[str(prev)]["next"] = None
-                        if nxt:
-                            categories[str(nxt)]["previous"] = None
+                # relink volumes
+                for cat in healed_volume:
+                    cat.volume = self._get_volume_hash(
+                        self, [ctx.guild.get_channel(cat.id)]
+                    )
+                    cat.volume_pos = 0
 
-                        categories[str(cat.id)]["previous"] = None
-                        categories[str(cat.id)]["next"] = None
+                session.commit()
 
-        await self.log_unlinked(self, ctx, split_vols)
+                if len(healed_volume) >= 1:
+                    await self.link_categories(
+                        ctx, *[ctx.guild.get_channel(cat.id) for cat in healed_volume]
+                    )
+
+        # not working yet
+        # await self.log_unlinked(self, ctx, split_vols)
 
         return await ctx.tick()
 
