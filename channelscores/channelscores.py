@@ -37,6 +37,12 @@ class ChannelScore:
         self.score = score
 
 
+class Volume:
+    def __init__(self, id: int, categories: List[discord.CategoryChannel]):
+        self.id = id
+        self.categories = categories
+
+
 async def lis_sort(
     channels: List[ChannelScore], channels_sorted: List[Channel], first_pos
 ):
@@ -180,6 +186,8 @@ class CScores(commands.Cog):
         with Session(self.engine) as session:
             stmt = select(Category).where(Category.guild_id == guild.id)
             categories = session.scalars(stmt).all()
+
+            volumes = self.get_volumes(self, session, guild)
 
         for category in categories:
             # get the first position
@@ -622,8 +630,33 @@ class CScores(commands.Cog):
         ).hexdigest(8)
 
     @staticmethod
-    def get_volumes(self, categories: dict) -> list:
-        pass
+    def get_volumes(self, session: Session, guild: discord.Guild) -> List[Volume]:
+        volumes: List[Volume] = []
+
+        # get list of volumes
+        stmt = (
+            select(Category.volume)
+            .where(Category.guild_id == guild.id)
+            .group_by(Category.volume)
+        )
+
+        [volumes.append(Volume(id, [])) for id in session.scalars(stmt).all()]
+
+        # fill them
+        for v in volumes:
+            stmt = (
+                select(Category)
+                .where(Category.guild_id == guild.id)
+                .where(Category.volume == v.id)
+                .order_by(Category.volume_pos)
+            )
+
+            [
+                v.categories.append(guild.get_channel(category.id))
+                for category in session.scalars(stmt).all()
+            ]
+
+        return volumes
 
     ### actions that you perform on channels
 
@@ -968,8 +1001,7 @@ class CScores(commands.Cog):
                         ctx, *[ctx.guild.get_channel(cat.id) for cat in healed_volume]
                     )
 
-        # not working yet
-        # await self.log_unlinked(self, ctx, split_vols)
+        await self.log_unlinked(self, ctx, split_vols)
 
         return await ctx.tick()
 
