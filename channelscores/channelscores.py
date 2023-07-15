@@ -1314,6 +1314,16 @@ class CScores(commands.Cog):
                 .count()
             )
 
+            volumes = get_volumes(session, ctx.guild)
+            arrow = " -> "
+            nl = "\n"
+            vlist = []
+
+            for volume in volumes:
+                if len(volume.categories) > 1:
+                    vstring = arrow.join([cat.name for cat in volume.categories])
+                    vlist.append(vstring)
+
         return await ctx.send(
             embed=discord.Embed(
                 title="channel scores settings",
@@ -1330,6 +1340,7 @@ class CScores(commands.Cog):
                 [f"{ctx.guild.get_channel(cat.id).name}" for cat in categories]
               )
               if categories else ""}
+            **volumes:** {nl.join(vlist)}
             **channels:** {total_channels} - {untracked_count} not tracked
             """,
             )
