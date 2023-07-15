@@ -46,20 +46,36 @@ class ChannelScore:
 
 
 class Volume:
-    def __init__(self, id: int, categories: List[discord.CategoryChannel]):
+    def __init__(self, id: str, categories: List[discord.CategoryChannel]):
         self.id = id
         self.categories = categories
 
 
-def get_volumes(session: Session, guild: discord.Guild) -> List[Volume]:
+def get_volumes(
+    session: Session,
+    guild: discord.Guild,
+    categories: Optional[List[discord.CategoryChannel]] = None,
+) -> List[Volume]:
+    """get all volumes in a guild or volumes from member cats"""
     volumes: List[Volume] = []
 
     # get list of volumes
-    stmt = (
-        select(Category.volume)
-        .where(Category.guild_id == guild.id)
-        .group_by(Category.volume)
-    )
+    if categories:
+        # from categories
+        stmt = (
+            select(Category.volume)
+            .where(Category.id.in_([cat.id for cat in categories]))
+            .group_by(Category.volume)
+        )
+    elif guild:
+        # from guild
+        stmt = (
+            select(Category.volume)
+            .where(Category.guild_id == guild.id)
+            .group_by(Category.volume)
+        )
+    else:
+        raise ValueError("must provide either guild or categories")
 
     [volumes.append(Volume(id, [])) for id in session.scalars(stmt).all()]
 
@@ -224,7 +240,7 @@ class CScores(commands.Cog):
             stmt = select(Category).where(Category.guild_id == guild.id)
             categories = session.scalars(stmt).all()
 
-            volumes = get_volumes(session, guild)
+            volumes = get_volumes(session, guild=guild)
 
         for volume in volumes:
             # get all channels in volume
@@ -645,17 +661,33 @@ class CScores(commands.Cog):
         )
 
     @staticmethod
-    async def log_unlinked(self, ctx, volumes):
-        raise
-        arrow = " -/> "
+    async def log_unlinked(
+        self, ctx, volumes: List[Volume], unlinked: List[discord.CategoryChannel]
+    ):
+        link = " -> "
+        unlink = " -/> "
         nl = "\n"
+
+        broken_volumes = []
+
+        for volume in volumes:
+            broken = ""
+            for i, cat in enumerate(volume.categories):
+                broken += f"{cat.name}" + (
+                    (link if cat not in unlinked else unlink)
+                    if i < len(volume.categories) - 1
+                    else ""
+                )
+            broken_volumes.append(broken)
+
         await self.log_to_channel(
             self,
             ctx,
             title="scores - categories unlinked",
             description=f"""
             logical volume split
-            {nl.join([arrow.join(str(vol_id)) for vol in volumes])}
+            unlinked categories: {humanize_list(unlinked)}
+            {nl.join(broken_volumes)}
             by {ctx.author.mention}""",
         )
 
@@ -1015,15 +1047,23 @@ class CScores(commands.Cog):
     async def unlink_categories(
         self, ctx: commands.Context, *categories: discord.CategoryChannel
     ):
-        """break links to split categories"""
+        """break links to split volumes"""
         if not categories:
             return ctx.send("no categories to unlink")
 
         with Session(self.engine) as session:
+            # get broken vols for log (should use this instead of split_vols)
+            broken_vols = get_volumes(
+                session=session, guild=ctx.guild, categories=categories
+            )
+
+            # get unlinked categories
             stmt = select(Category).where(
                 Category.id.in_([cat.id for cat in categories])
             )
             unlinked_cats = session.scalars(stmt).all()
+
+            # get unlinked volumes
             split_vols = set([c.volume for c in unlinked_cats])
 
             # recalculate simple volume hash for unlinked cats
@@ -1050,14 +1090,16 @@ class CScores(commands.Cog):
 
                 session.commit()
 
-                if len(healed_volume) >= 1:
+                await self.log_unlinked(self, ctx, broken_vols, categories)
+
+                if len(healed_volume) > 1:
                     await self.link_categories(
                         ctx, *[ctx.guild.get_channel(cat.id) for cat in healed_volume]
                     )
 
-        await self.log_unlinked(self, ctx, split_vols)
+        await ctx.tick()
 
-        return await ctx.tick()
+        return await self.sync_channels(self, ctx.guild)
 
     @channelscores.command(name="resync")
     async def sync_trigger(self, ctx: commands.Context):
