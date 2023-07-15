@@ -1,13 +1,10 @@
 import time
-from datetime import datetime, timezone
 import math
-import asyncio
-from collections import OrderedDict
-from copy import copy
+from asyncio import asyncio
+from datetime import datetime, timezone
+from collections import deque
 from typing import Optional
 from hashlib import shake_128
-
-from operator import attrgetter
 
 import discord
 
@@ -20,6 +17,7 @@ from redbot.core.utils.predicates import MessagePredicate
 from sqlalchemy import create_engine
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from channelscores.models import *
 
 
@@ -36,6 +34,15 @@ class ChannelScore:
         self.distance = distance
         self.score = score
 
+    def __eq__(self, __value: object) -> bool:
+        if isinstance(__value, ChannelScore):
+            return self is __value
+        if isinstance(__value, Channel):
+            return self.text_channel.id == __value.id
+        if isinstance(__value, int):
+            return self.text_channel.id == __value
+        raise TypeError("channelscore can only be compared to the same object or id")
+
 
 class Volume:
     def __init__(self, id: int, categories: List[discord.CategoryChannel]):
@@ -43,12 +50,41 @@ class Volume:
         self.categories = categories
 
 
+def get_volumes(session: Session, guild: discord.Guild) -> List[Volume]:
+    volumes: List[Volume] = []
+
+    # get list of volumes
+    stmt = (
+        select(Category.volume)
+        .where(Category.guild_id == guild.id)
+        .group_by(Category.volume)
+    )
+
+    [volumes.append(Volume(id, [])) for id in session.scalars(stmt).all()]
+
+    # fill them
+    for v in volumes:
+        stmt = (
+            select(Category)
+            .where(Category.guild_id == guild.id)
+            .where(Category.volume == v.id)
+            .order_by(Category.volume_pos)
+        )
+
+        [
+            v.categories.append(guild.get_channel(category.id))
+            for category in session.scalars(stmt).all()
+        ]
+
+    return volumes
+
+
 async def lis_sort(
-    channels: List[ChannelScore], channels_sorted: List[Channel], first_pos
+    channels: List[ChannelScore], channels_sorted: List[discord.TextChannel], first_pos
 ):
     untracked = []
     for pos, c in enumerate(channels):
-        c.rank = channels_sorted.index(c.text_channel.id)
+        c.rank = channels_sorted.index(c.text_channel)
         c.distance = pos - c.rank
 
     for c in untracked:
@@ -77,7 +113,7 @@ async def lis_sort(
         await asyncio.sleep(1)
 
         for pos, c in enumerate(channels):
-            c.rank = channels_sorted.index(c.text_channel.id)
+            c.rank = channels_sorted.index(c.text_channel)
             c.distance = pos - c.rank
 
         chanscore = sorted(channels, key=lambda x: abs(x.distance), reverse=True)[0]
@@ -187,51 +223,97 @@ class CScores(commands.Cog):
             stmt = select(Category).where(Category.guild_id == guild.id)
             categories = session.scalars(stmt).all()
 
-            volumes = self.get_volumes(self, session, guild)
+            volumes = get_volumes(session, guild)
 
-        for category in categories:
-            # get the first position
-            try:
-                category = guild.get_channel(category.id)
-                category.text_channels.sort(key=lambda x: x.position)
-                first_channel = category.text_channels[0]
-            except IndexError:
-                continue
-            first_pos = first_channel.position
+        for volume in volumes:
+            # get all channels in volume
+            vol_chans: List[Channel] = []
+            [
+                [vol_chans.append(chan) for chan in cat.channels]
+                for cat in volume.categories
+            ]
 
             with Session(self.engine) as session:
-                # get scoreboard
+                # get scoreboard for volume
                 stmt = (
                     select(Channel)
-                    .where(Channel.id.in_([c.id for c in category.text_channels]))
+                    .where(Channel.id.in_([c.id for c in vol_chans]))
                     .order_by(Channel.score.desc(), Channel.updated.desc())
                 )
 
                 # without pins
                 stmt = stmt.where(Channel.pinned == False)
-                scoreboard = session.scalars(stmt).all()
+                scoreboard = deque(session.scalars(stmt).all())
                 # get pins
                 stmt = stmt.where(Channel.pinned == True)
                 pins = session.scalars(stmt).all()
 
-            # sort pinned
+            # sort pins
             for p in pins:
                 scoreboard.insert(guild.get_channel(p.id).position - first_pos, p)
 
+            # insert channel object into scoreboard
             for c in scoreboard:
                 c.text_channel = guild.get_channel(c.id)
 
-            # cast to ChannelScore
-            channels = []
-            for c in category.text_channels:
-                channels.append(
-                    ChannelScore(
-                        c,
+            # scoreboard is now sorted with pins in place
+
+            # scoreboard by cats
+            scoreboard_cats = dict()
+
+            # sort scoreboard by cat
+            for cat in volume.categories:
+                # create key for cat
+                scoreboard_cats[cat.id]: List[discord.TextChannel] = []
+
+                # get next len(cat) channels from scoreboard
+                [
+                    scoreboard_cats[cat.id].append(scoreboard.popleft().text_channel)
+                    for i in range(len(cat.text_channels))
+                ]
+
+            # move channels to correct cat
+            # i dont sync perms to keep compatibility with blogs
+            for cat in scoreboard_cats:
+                for chan in scoreboard_cats[cat]:
+                    if not chan.category.id == cat:
+                        await chan.edit(
+                            category=guild.get_channel(cat),
+                            position=guild.get_channel(cat).text_channels[-1].position
+                            + 1,
+                            sync_permissions=False,
+                            reason="channel scores",
+                        )
+                        await asyncio.sleep(0.25)
+
+            # all channels are now in the correct cats
+
+            # lis sort cats
+            for cat in volume.categories:
+                # get the first position
+                cat.text_channels.sort(key=lambda x: x.position)
+                try:
+                    first_pos = cat.text_channels[0].position
+                except IndexError:  # no channels
+                    continue
+
+                # cast to ChannelScore
+                channels_to_sort: List[ChannelScore] = []
+                for c in cat.text_channels:
+                    channels_to_sort.append(
+                        ChannelScore(
+                            c,
+                        )
                     )
+
+                # sync sort to discord
+                await lis_sort(
+                    channels_to_sort,
+                    scoreboard_cats[cat.id],
+                    first_pos,
                 )
 
-            # finally sync sort to discord
-            await lis_sort(channels, scoreboard, first_pos)
+                await asyncio.sleep(5)
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
@@ -628,35 +710,6 @@ class CScores(commands.Cog):
         return shake_128(
             bytes("".join([str(c.id) for c in categories]), "utf-8")
         ).hexdigest(8)
-
-    @staticmethod
-    def get_volumes(self, session: Session, guild: discord.Guild) -> List[Volume]:
-        volumes: List[Volume] = []
-
-        # get list of volumes
-        stmt = (
-            select(Category.volume)
-            .where(Category.guild_id == guild.id)
-            .group_by(Category.volume)
-        )
-
-        [volumes.append(Volume(id, [])) for id in session.scalars(stmt).all()]
-
-        # fill them
-        for v in volumes:
-            stmt = (
-                select(Category)
-                .where(Category.guild_id == guild.id)
-                .where(Category.volume == v.id)
-                .order_by(Category.volume_pos)
-            )
-
-            [
-                v.categories.append(guild.get_channel(category.id))
-                for category in session.scalars(stmt).all()
-            ]
-
-        return volumes
 
     ### actions that you perform on channels
 
