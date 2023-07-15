@@ -1,6 +1,6 @@
 import time
 import math
-from asyncio import asyncio
+import asyncio
 from datetime import datetime, timezone
 from collections import deque
 from typing import Optional
@@ -16,6 +16,7 @@ from redbot.core.utils.predicates import MessagePredicate
 
 from sqlalchemy import create_engine
 from sqlalchemy import select
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from channelscores.models import *
@@ -1361,21 +1362,37 @@ class CScores(commands.Cog):
         self, ctx: commands.Context, channel: discord.TextChannel = None
     ):
         """view channel score"""
-        mention = None
-
         if not channel:
             channel = ctx.channel
+
+        mention = channel.mention
 
         with Session(self.engine) as session:
             stmt = select(Channel).where(Channel.id == channel.id)
             c = session.scalars(stmt).first()
-            mention = channel.mention
+
+            query = text(
+                """
+                  with scoreboard as
+                      (
+                      select row_number() over (order by score) as row_number, id
+                      from channel
+                      where guild_id = :guild_id
+                      )
+                  select * from scoreboard
+                  where id = :channel_id
+                                   """
+            )
+            rank = session.execute(
+                query,
+                {
+                    "guild_id": channel.guild.id,
+                    "channel_id": channel.id,
+                },
+            ).scalar_one()
 
             if not c:
                 return await ctx.send("this channel is not part of the scoreboard")
-
-        first_pos = channel.category.text_channels[0].position
-        rank = channel.position - first_pos + 1
 
         return await ctx.send(
             embed=discord.Embed(
@@ -1385,7 +1402,7 @@ class CScores(commands.Cog):
             **score:** {c.score} points
             **pinned:** {"yes (rank unreliable)" if c.pinned is True else "no"}
             **tracked:** {"yes" if c.tracked is True else "no"}
-            **added:** {c.added}
+            **added:** {c.added.strftime("%Y-%M-%d %H:%M")}
             """,
             )
         )
