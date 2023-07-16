@@ -335,14 +335,36 @@ class CScores(commands.Cog):
                     for chan in cat.text_channels:
                         flat_chans.append(chan)
 
+                await self.bot.get_channel(1087430609695162378).send(
+                    f"""
+                        flat scoreboard: {humanize_list([c.mention for c in flat_chans])}
+                     """
+                )
+
+                for p in pins:
+                    p.position = flat_chans.index(guild.get_channel(p.id))
+
+                pins.sort(key=lambda x: x.position)
+
                 # sort pins
                 for p in pins:
                     c = guild.get_channel(p.id)
-                    scoreboard.insert(flat_chans.index(c), p)
+                    scoreboard.insert(p.position, p)
+                    await self.bot.get_channel(1087430609695162378).send(
+                        f"""
+                            pushing pin {guild.get_channel(p.id).mention} to {flat_chans.index(c)}
+                        """
+                    )
 
             # insert channel object into scoreboard
             for c in scoreboard:
                 c.text_channel = guild.get_channel(c.id)
+
+            await self.bot.get_channel(1087430609695162378).send(
+                f"""
+                scoreboard: {humanize_list([c.text_channel.mention for c in scoreboard])}
+                """
+            )
 
             # scoreboard is now sorted with pins in place
 
@@ -431,7 +453,13 @@ class CScores(commands.Cog):
                     first_pos,
                 )
 
-                await asyncio.sleep(5)
+                await asyncio.sleep(1)
+
+        await self.bot.get_channel(1087430609695162378).send(
+            f"""
+            sorting {guild.name} finished
+            """
+        )
 
     @staticmethod
     async def add_points(self, channel: discord.TextChannel):
@@ -1581,8 +1609,6 @@ class CScores(commands.Cog):
             for index, c in enumerate(scoreboard)
         ]
 
-        scores = scores[offset : offset + page_size]
-
         nl = "\n"
         top = f"{nl.join(scores)}"
 
@@ -1611,10 +1637,10 @@ class CScores(commands.Cog):
             stmt = select(Channel).where(Channel.id == channel.id)
             c = session.scalars(stmt).first()
 
-            rank = get_rank(session, c)
-
             if not c:
                 return await ctx.send("this channel is not part of the scoreboard")
+
+            rank = get_rank(session, c)
 
         return await ctx.send(
             embed=discord.Embed(
