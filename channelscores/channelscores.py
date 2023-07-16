@@ -96,6 +96,49 @@ def get_volumes(
     return volumes
 
 
+def get_rank(session, channel: Channel) -> int:
+    query = text(
+        """
+          with scoreboard as
+              (
+              select row_number() over (order by score desc) as row_number, id
+              from channel
+              where guild_id = :guild_id
+              )
+          select * from scoreboard
+          where id = :channel_id
+                            """
+    )
+    rank = session.execute(
+        query,
+        {
+            "guild_id": channel.guild.id,
+            "channel_id": channel.id,
+        },
+    ).scalar_one()
+
+    return rank
+
+
+def get_volume_by_id(
+    session: Session,
+    guild: discord.Guild,
+    id: str,
+) -> Volume:
+    """get volume by its id"""
+    if not id:
+        raise ValueError("no volume id provided")
+
+    stmt = select(Category).where(Category.volume == id).order_by(Category.volume_pos)
+
+    volume = Volume(
+        id,
+        [guild.get_channel(category.id) for category in session.scalars(stmt).all()],
+    )
+
+    return volume
+
+
 async def lis_sort(
     channels: List[ChannelScore], channels_sorted: List[discord.TextChannel], first_pos
 ):
@@ -195,6 +238,7 @@ class CScores(commands.Cog):
                     id=guild.id,
                     enabled=False,
                     sync=False,
+                    volume_mode=False,
                     cooldown=self.DEFAULT_COOLDOWN,
                     grace=self.DEFAULT_GRACE,
                     range=self.DEFAULT_RANGE,
@@ -209,6 +253,7 @@ class CScores(commands.Cog):
         guild: discord.Guild,
         enabled: Optional[bool] = None,
         sync: Optional[bool] = None,
+        volume_mode: Optional[bool] = None,
         cooldown: Optional[int] = None,
         grace: Optional[int] = None,
         range: Optional[int] = None,
@@ -223,6 +268,8 @@ class CScores(commands.Cog):
                 guild.enabled = enabled
             if sync is not None:
                 guild.sync = sync
+            if volume_mode is not None:
+                guild.volume_mode = volume_mode
             if cooldown is not None:
                 guild.cooldown = cooldown
             if grace is not None:
@@ -231,14 +278,31 @@ class CScores(commands.Cog):
                 guild.range = range
             if log_channel is not None:
                 guild.log_channel = log_channel.id
-
             session.commit()
 
     @staticmethod
     async def sync_channels(self, guild: discord.Guild):
         with Session(self.engine) as session:
-            stmt = select(Category).where(Category.guild_id == guild.id)
+            stmt = select(Guild).where(Guild.id == guild.id)
+            volume_mode = session.scalars(stmt).first().volume_mode
+
+            # get thresholds for category
+            stmt = (
+                select(Category)
+                .where(Category.guild_id == guild.id)
+                .order_by(Category.volume_pos)
+            )
             categories = session.scalars(stmt).all()
+
+            scoreboard_cats: dict() = {}
+
+            # get thresholds
+            for cat in categories:
+                scoreboard_cats[cat.id]: dict() = {
+                    "threshold": cat.threshold,
+                    "channels": [],
+                    "top": False,
+                }
 
             volumes = get_volumes(session, guild=guild)
 
@@ -259,15 +323,22 @@ class CScores(commands.Cog):
                 )
 
                 # without pins
+                stmt_pins = stmt.where(Channel.pinned == True)
                 stmt = stmt.where(Channel.pinned == False)
                 scoreboard = deque(session.scalars(stmt).all())
                 # get pins
-                stmt = stmt.where(Channel.pinned == True)
-                pins = session.scalars(stmt).all()
+                pins = session.scalars(stmt_pins).all()
 
-            # sort pins
-            for p in pins:
-                scoreboard.insert(guild.get_channel(p.id).position - first_pos, p)
+                # flatten channel list to get insert pins
+                flat_chans = []
+                for cat in volume.categories:
+                    for chan in cat.text_channels:
+                        flat_chans.append(chan)
+
+                # sort pins
+                for p in pins:
+                    c = guild.get_channel(p.id)
+                    scoreboard.insert(flat_chans.index(c), p)
 
             # insert channel object into scoreboard
             for c in scoreboard:
@@ -276,28 +347,58 @@ class CScores(commands.Cog):
             # scoreboard is now sorted with pins in place
 
             # scoreboard by cats
-            scoreboard_cats = dict()
+
+            # create key for cat
+            scoreboard_cats[cat.id]["channels"]: List[discord.TextChannel] = []
+
+            # mark top cat as it has no upper threshold
+            scoreboard_cats[volume.categories[0].id]["top"] = True
 
             # sort scoreboard by cat
-            for cat in volume.categories:
-                # create key for cat
-                scoreboard_cats[cat.id]: List[discord.TextChannel] = []
+            if volume_mode == 0:
+                # fixed
+                for cat in volume.categories:
+                    # get next len(cat) channels from scoreboard
+                    # starting by highest scores
+                    [
+                        scoreboard_cats[cat.id]["channels"].append(
+                            scoreboard.popleft().text_channel
+                        )
+                        for i in range(len(cat.text_channels))
+                    ]
 
-                # get next len(cat) channels from scoreboard
-                [
-                    scoreboard_cats[cat.id].append(scoreboard.popleft().text_channel)
-                    for i in range(len(cat.text_channels))
-                ]
+            else:
+                # by score
+                volume.categories.reverse()
+                for cat in volume.categories:
+                    # get items below cat threshold
+                    # starting by low scores
+
+                    # always true except for last item of last cat
+                    while len(scoreboard):
+                        c = scoreboard.pop()
+                        # if last cat, just keep going until we ran out of items
+                        if (
+                            not scoreboard_cats[cat.id]["top"]
+                            and c.score > scoreboard_cats[cat.id]["threshold"]
+                        ):
+                            # put it back
+                            scoreboard.append(c)
+                            break
+                        scoreboard_cats[cat.id]["channels"].insert(0, c.text_channel)
 
             # move channels to correct cat
             # i dont sync perms to keep compatibility with blogs
             for cat in scoreboard_cats:
-                for chan in scoreboard_cats[cat]:
+                for chan in scoreboard_cats[cat]["channels"]:
                     if not chan.category.id == cat:
+                        try:
+                            pos = guild.get_channel(cat).text_channels[-1].position
+                        except:
+                            pos = 0
                         await chan.edit(
                             category=guild.get_channel(cat),
-                            position=guild.get_channel(cat).text_channels[-1].position
-                            + 1,
+                            position=pos + 1,
                             sync_permissions=False,
                             reason="channel scores",
                         )
@@ -326,7 +427,7 @@ class CScores(commands.Cog):
                 # sync sort to discord
                 await lis_sort(
                     channels_to_sort,
-                    scoreboard_cats[cat.id],
+                    scoreboard_cats[cat.id]["channels"],
                     first_pos,
                 )
 
@@ -646,7 +747,7 @@ class CScores(commands.Cog):
         )
 
     @staticmethod
-    async def log_linked(self, ctx, volume):
+    async def log_linked(self, ctx, volume_id: str, volume):
         arrow = " -> "
         vnames = []
         [vnames.append(cat.name) for cat in volume]
@@ -656,7 +757,7 @@ class CScores(commands.Cog):
             title="scores - categories linked",
             description=f"""
             new logical volume created
-            {arrow.join(vnames)}
+            {volume_id}: {arrow.join(vnames)}
             by {ctx.author.mention}""",
         )
 
@@ -689,6 +790,28 @@ class CScores(commands.Cog):
             unlinked categories: {humanize_list(unlinked)}
             {nl.join(broken_volumes)}
             by {ctx.author.mention}""",
+        )
+
+    @staticmethod
+    async def log_thresholds(self, ctx, categories):
+        nl = "\n"
+
+        thresholds = []
+
+        [
+            thresholds.append(
+                f"{ctx.guild.get_channel(cat.id).name}: {cat.threshold} points"
+            )
+            for cat in categories
+        ]
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - thresholds changed",
+            description=f"""
+            {nl.join(thresholds)}
+            updated by {ctx.author.mention}""",
         )
 
     @staticmethod
@@ -1033,13 +1156,15 @@ class CScores(commands.Cog):
 
                 volume.append(c)
 
+            vol_id = self._get_volume_hash(self, categories)
+
             for i, cat in enumerate(volume):
-                cat.volume = self._get_volume_hash(self, categories)
+                cat.volume = vol_id
                 cat.volume_pos = i
 
             session.commit()
 
-        await self.log_linked(self, ctx, categories)
+        await self.log_linked(self, ctx, vol_id, categories)
 
         return await ctx.tick()
 
@@ -1100,6 +1225,40 @@ class CScores(commands.Cog):
         await ctx.tick()
 
         return await self.sync_channels(self, ctx.guild)
+
+    @channelscores.command(name="thresholds", aliases=["threshold"])
+    async def volume_thresholds(
+        self, ctx: commands.Context, volume_id: str, *thresholds: int
+    ):
+        """set thresholds for volume"""
+        if not volume_id:
+            return await ctx.send("must provide a volume to set thresholds")
+
+        with Session(self.engine) as session:
+            volume = get_volume_by_id(session, ctx.guild, volume_id)
+
+            thresholds = list(thresholds)
+            thresholds.sort(reverse=True)
+
+            if len(thresholds) != len(volume.categories):
+                return await ctx.send("must provide one threshold for each category")
+
+            stmt = (
+                select(Category)
+                .where(Category.id.in_([cat.id for cat in volume.categories]))
+                .order_by(Category.volume_pos)
+            )
+
+            categories = session.scalars(stmt).all()
+
+            for i, cat in enumerate(categories):
+                cat.threshold = thresholds[i]
+
+            session.commit()
+
+            await self.log_thresholds(self, ctx, categories)
+
+        return await ctx.tick()
 
     @channelscores.command(name="resync")
     async def sync_trigger(self, ctx: commands.Context):
@@ -1291,10 +1450,35 @@ class CScores(commands.Cog):
 
         return await ctx.tick()
 
+    @settings.command(name="volume_mode", aliases=["vmode"])
+    async def volume_mode(self, ctx: commands.Context, modestr: str):
+        """set volume mode - can be either 'fixed' or 'score'"""
+
+        if modestr == "fixed":
+            mode = False
+        elif modestr == "score":
+            mode = True
+        else:
+            return await ctx.send(f"mode should be either 'fixed' or 'score'")
+
+        await self.log_to_channel(
+            self,
+            ctx,
+            title=f"scores - volume mode changed ",
+            description=f"""
+              volume mode changed to {modestr} by {ctx.author.mention}
+            """,
+        )
+
+        self.update_guild(self, ctx.guild, volume_mode=mode)
+
+        return await ctx.tick()
+
     @commands.bot_has_permissions(embed_links=True)
     @settings.command(name="view")
     async def view_settings(self, ctx: commands.Context):
         """view the current channel scores settings"""
+        self.update_guild(self, ctx.guild)
 
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == ctx.guild.id)
@@ -1320,8 +1504,9 @@ class CScores(commands.Cog):
             vlist = []
 
             for volume in volumes:
+                vstring = f"{volume.id}: "
                 if len(volume.categories) > 1:
-                    vstring = arrow.join([cat.name for cat in volume.categories])
+                    vstring += arrow.join([cat.name for cat in volume.categories])
                     vlist.append(vstring)
 
         return await ctx.send(
@@ -1331,6 +1516,7 @@ class CScores(commands.Cog):
                 description=f"""
             **enabled:** {settings.enabled}
             **sync**: {"enabled" if settings.sync else "disabled"}
+            **volume mode**: {"fixed" if not settings.volume_mode else "by score"}
             **log channel:** {"None" if settings.log_channel is None else ctx.guild.get_channel(settings.log_channel).mention}
             **cooldown:** {settings.cooldown} minutes
             **grace period:** {settings.grace} minutes
@@ -1340,7 +1526,8 @@ class CScores(commands.Cog):
                 [f"{ctx.guild.get_channel(cat.id).name}" for cat in categories]
               )
               if categories else ""}
-            **volumes:** {nl.join(vlist)}
+            **volumes:**
+            {nl.join(vlist)}
             **channels:** {total_channels} - {untracked_count} not tracked
             """,
             )
@@ -1424,25 +1611,7 @@ class CScores(commands.Cog):
             stmt = select(Channel).where(Channel.id == channel.id)
             c = session.scalars(stmt).first()
 
-            query = text(
-                """
-                  with scoreboard as
-                      (
-                      select row_number() over (order by score) as row_number, id
-                      from channel
-                      where guild_id = :guild_id
-                      )
-                  select * from scoreboard
-                  where id = :channel_id
-                                   """
-            )
-            rank = session.execute(
-                query,
-                {
-                    "guild_id": channel.guild.id,
-                    "channel_id": channel.id,
-                },
-            ).scalar_one()
+            rank = get_rank(session, c)
 
             if not c:
                 return await ctx.send("this channel is not part of the scoreboard")
