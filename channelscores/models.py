@@ -44,6 +44,7 @@ class Category(Base):
     guild: Mapped["Guild"] = relationship(back_populates="categories")
     volume: Mapped[str] = mapped_column(String(8))
     volume_pos: Mapped[int]
+    threshold: Mapped[Optional[int]]
     added: Mapped[datetime] = mapped_column(UtcDateTime)
 
     __table_args__ = (UniqueConstraint("volume", "volume_pos", name="vol_pos"),)
@@ -64,6 +65,7 @@ class Guild(Base):
     )
     enabled: Mapped[bool]
     sync: Mapped[bool]
+    volume_mode: Mapped[bool]  # 0 = fixed - 1 = by score
     cooldown: Mapped[int]
     grace: Mapped[int]
     range: Mapped[int]
