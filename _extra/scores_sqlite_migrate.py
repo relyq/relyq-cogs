@@ -10,6 +10,7 @@ with sqlite3.connect("scores.db") as con:
         id INTEGER NOT NULL,
         enabled BOOLEAN NOT NULL,
         sync BOOLEAN NOT NULL,
+        volume_mode BOOLEAN NOT NULL,
         cooldown INTEGER NOT NULL,
         grace INTEGER NOT NULL,
         range INTEGER NOT NULL,
@@ -40,6 +41,7 @@ with sqlite3.connect("scores.db") as con:
         guild_id INTEGER NOT NULL,
         volume VARCHAR(8) NOT NULL,
         volume_pos INTEGER NOT NULL,
+        threshold INTEGER,
         added DATETIME NOT NULL,
         PRIMARY KEY (id),
         CONSTRAINT vol_pos UNIQUE (volume, volume_pos),
@@ -59,6 +61,7 @@ with sqlite3.connect("scores.db") as con:
             log_channel = settings[g]["log_channel"]
             enabled = settings[g]["enabled"]
             sync = settings[g]["sync"]
+            volume_mode = False
             cooldown = settings[g]["cooldown"]
             grace = settings[g]["grace"]
             range = settings[g]["range"]
@@ -67,6 +70,7 @@ with sqlite3.connect("scores.db") as con:
             print(f"log_channel: {log_channel}")
             print(f"enabled: {enabled}")
             print(f"sync: {sync}")
+            print(f"volume_mode: {volume_mode}")
             print(f"cooldown: {cooldown}")
             print(f"grace: {grace}")
             print(f"range: {range}")
@@ -74,11 +78,12 @@ with sqlite3.connect("scores.db") as con:
             print()
 
             cur.execute(
-                "INSERT INTO guild (id, enabled, sync, cooldown, grace, range, log_channel, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO guild (id, enabled, sync, volume_mode, cooldown, grace, range, log_channel, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     int(g),
                     bool(enabled),
                     bool(sync),
+                    volume_mode,
                     int(cooldown),
                     int(grace),
                     int(range),
