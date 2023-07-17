@@ -1090,11 +1090,16 @@ class CScores(commands.Cog):
     @channelscores.command(name="pin")
     async def pin_channels(self, ctx: commands.Context, *channels: discord.TextChannel):
         """pin channels so they dont move"""
+        if not channels:
+            channels = [ctx.channel]
+
+        pinned: List[Channel] = []
 
         with Session(self.engine) as session:
             stmt = select(Channel).where(Channel.id.in_([chan.id for chan in channels]))
 
             for channel in session.scalars(stmt):
+                pinned.append(ctx.guild.get_channel(channel.id))
                 channel.pinned = True
 
             session.commit()
@@ -1104,7 +1109,7 @@ class CScores(commands.Cog):
             ctx,
             title=f"scores - channels pinned",
             description=f"""
-              {humanize_list([c.mention for c in channels])} pinned by {ctx.author.mention}
+              {humanize_list([c.mention for c in pinned])} pinned by {ctx.author.mention}
             """,
         )
 
@@ -1115,11 +1120,16 @@ class CScores(commands.Cog):
         self, ctx: commands.Context, *channels: discord.TextChannel
     ):
         """unpin channels so they move again"""
+        if not channels:
+            channels = [ctx.channel]
+
+        unpinned: List[Channel] = []
 
         with Session(self.engine) as session:
             stmt = select(Channel).where(Channel.id.in_([chan.id for chan in channels]))
 
             for channel in session.scalars(stmt):
+                unpinned.append(ctx.guild.get_channel(channel.id))
                 channel.pinned = False
 
             session.commit()
@@ -1129,7 +1139,7 @@ class CScores(commands.Cog):
             ctx,
             title=f"channels unpinned - scoreboard",
             description=f"""
-              {humanize_list([c.mention for c in channels])} unpinned by {ctx.author.mention}
+              {humanize_list([c.mention for c in unpinned])} unpinned by {ctx.author.mention}
             """,
         )
 
