@@ -602,14 +602,14 @@ class CScores(commands.Cog):
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
+        if message.author.id is message.guild.me.id:
+            return
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == message.guild.id)
             guild = session.scalars(stmt).first()
             if not guild:
                 return
             if guild.enabled is False:
-                return
-            if message.author.id is message.guild.me.id:
                 return
 
             stmt = select(Channel).where(Channel.id == message.channel.id)
