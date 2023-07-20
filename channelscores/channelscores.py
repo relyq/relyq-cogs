@@ -694,7 +694,7 @@ class CScores(commands.Cog):
         name="channelscores", aliases=["cscores", "cscore", "scores", "score"]
     )
     @commands.guild_only()
-    @commands.admin_or_permissions(administrator=True)
+    @commands.admin_or_permissions(manage_channels=True)
     async def channelscores(self, ctx: commands.Context):
         """channel scores"""
 
