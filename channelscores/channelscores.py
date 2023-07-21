@@ -760,8 +760,10 @@ class CScores(commands.Cog):
             ctx,
             title="scores - channels tracked",
             description=f"""
-            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            categories: {humanize_list([cat.name for cat in categories])
+                         if categories else ''}
+            channels: {humanize_list([c.mention for c in text_channels])
+                       if text_channels else ''}
             added by {ctx.author.mention}""",
         )
 
@@ -840,8 +842,10 @@ class CScores(commands.Cog):
             ctx,
             title="scores - channels removed",
             description=f"""
-            categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
-            channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
+            categories: {humanize_list([cat.name for cat in categories])
+                         if categories else ''}
+            channels: {humanize_list([c.mention for c in text_channels])
+                       if text_channels else ''}
             removed by {ctx.author.mention}""",
         )
 
@@ -1000,8 +1004,10 @@ class CScores(commands.Cog):
             ctx,
             title="scores - channels untracked",
             description=f"""
-            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
-            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]])
+                         if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]])
+                       if sorted_channels["text_channels"] else ''}
             added by {ctx.author.mention}""",
         )
 
@@ -1046,8 +1052,10 @@ class CScores(commands.Cog):
             ctx,
             title="scores - channels score reset",
             description=f"""
-            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
-            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
+            categories: {humanize_list([cat.name for cat in sorted_channels["categories"]])
+                         if sorted_channels["categories"] else ''}
+            channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]])
+                       if sorted_channels["text_channels"] else ''}
             reset by {ctx.author.mention}""",
         )
 
