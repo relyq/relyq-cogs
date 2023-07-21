@@ -85,7 +85,7 @@ class Blogs(commands.Cog):
         if len(active) >= maximum:
             return await ctx.send(f"there are already {maximum} active text channels")
         if len(active_author) >= userlimit:
-            return await ctx.send(f"you already have a blog")
+            return await ctx.send("you already have a blog")
 
         # get category overwrites - aka permissions
         category = self.bot.get_channel(
@@ -144,39 +144,39 @@ class Blogs(commands.Cog):
 
         async with new.typing():
             await asyncio.sleep(1)
-        await new.send(f"its perms are currently synced to the blogs category")
+        await new.send("its perms are currently synced to the blogs category")
 
         async with new.typing():
             await asyncio.sleep(1)
         await new.send(
-            f"but you can rename it and set its description to whatever you want using `ltn blog set name` and `ltn blog set topic`"
+            "but you can rename it and set its description to whatever you want using `ltn blog set name` and `ltn blog set topic`"
         )
 
         async with new.typing():
             await asyncio.sleep(1)
         await new.send(
-            f"you can also set it to private with `ltn blog set private` so only you can post"
+            "you can also set it to private with `ltn blog set private` so only you can post"
         )
 
         async with new.typing():
             await asyncio.sleep(1.25)
         await new.send(
-            f"in that case you can choose to share your blog with some ppl using `ltn blog share @lantern` so they can post too"
+            "in that case you can choose to share your blog with some ppl using `ltn blog share @lantern` so they can post too"
         )
 
         async with new.typing():
             await asyncio.sleep(1)
             await new.send(
-                f"`ltn blog set public` will sync it back to the blog category perms"
+                "`ltn blog set public` will sync it back to the blog category perms"
             )
 
         async with new.typing():
             await asyncio.sleep(0.5)
-        await new.send(f"type `ltn blog` to see all the options")
+        await new.send("type `ltn blog` to see all the options")
 
         async with new.typing():
             await asyncio.sleep(1)
-        await new.send(f"once done do `ltn clean 99` to clean the chat")
+        await new.send("once done do `ltn clean 99` to clean the chat")
 
         return await ctx.tick()
 
@@ -232,7 +232,7 @@ class Blogs(commands.Cog):
 
         async with ctx.channel.typing():
             await asyncio.sleep(0.5)
-        await ctx.send(f"okay bye")
+        await ctx.send("okay bye")
 
         async with ctx.channel.typing():
             await asyncio.sleep(2)
@@ -604,26 +604,11 @@ class Blogs(commands.Cog):
         overwrites = ctx.channel.overwrites
 
         # note these are ids
-        shared = []
-        blocked = []
 
         async with self.config.guild(ctx.guild).text.active() as a:
             c = a[str(ctx.channel.id)]
-            if "shared" in c:
-                shared = c["shared"]
-            if "blocked" in c:
-                blocked = c["blocked"]
 
             c["private"] = True
-
-            """
-            # disable perms # actually i only need to disable perms for everyone
-            for role_user in overwrites:
-                if role_user.id not in shared and role_user.id not in blocked:
-                    overwrites[role_user].update(
-                        view_channel=None, manage_messages=None,
-                        send_messages=False, add_reactions=False)
-            """
 
             # disable perms for default role
             overwrites[ctx.guild.default_role] = overwrites.get(
@@ -890,7 +875,7 @@ class Blogs(commands.Cog):
 
         async with ctx.channel.typing():
             await asyncio.sleep(0.5)
-        await ctx.send(f"okay bye")
+        await ctx.send("okay bye")
 
         async with ctx.channel.typing():
             await asyncio.sleep(2)
@@ -995,7 +980,7 @@ class Blogs(commands.Cog):
         if new_owner is ctx.guild.me:
             return
         if len(active_new_owner) >= userlimit:
-            return await ctx.send(f"new owner already has a blog")
+            return await ctx.send("new owner already has a blog")
 
         overwrites = ctx.channel.overwrites
 
@@ -1248,7 +1233,7 @@ class Blogs(commands.Cog):
                 return await ctx.send(
                     "couldn't resync channels due to missing permissions. please sync channels manually & rerun resync to fix blogs."
                 )
-            except AttributeError as e:
+            except AttributeError:
                 err.append(f"{channel.mention}")
 
         if len(err) > 1:
