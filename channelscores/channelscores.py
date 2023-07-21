@@ -838,7 +838,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - channels removed",
+            title="scores - channels removed",
             description=f"""
             categories: {humanize_list([cat.name for cat in categories]) if categories else ''}
             channels: {humanize_list([c.mention for c in text_channels]) if text_channels else ''}
@@ -998,7 +998,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - channels untracked",
+            title="scores - channels untracked",
             description=f"""
             categories: {humanize_list([cat.name for cat in sorted_channels["categories"]]) if sorted_channels["categories"] else ''}
             channels: {humanize_list([c.mention for c in sorted_channels["text_channels"]]) if sorted_channels["text_channels"] else ''}
@@ -1121,7 +1121,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - channels pinned",
+            title="scores - channels pinned",
             description=f"""
               {humanize_list([c.mention for c in pinned])} pinned by {ctx.author.mention}
             """,
@@ -1151,7 +1151,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"channels unpinned - scoreboard",
+            title="channels unpinned - scoreboard",
             description=f"""
               {humanize_list([c.mention for c in unpinned])} unpinned by {ctx.author.mention}
             """,
@@ -1303,7 +1303,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - sync triggered",
+            title="scores - sync triggered",
             description=f"""
               channel sync triggered by {ctx.author.mention}
             """,
@@ -1350,7 +1350,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - cooldown changed",
+            title="scores - cooldown changed",
             description=f"""
               cooldown changed to {minutes} minutes by {ctx.author.mention}
             """,
@@ -1377,7 +1377,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - grace changed",
+            title="scores - grace changed",
             description=f"""
             grace changed to {minutes} minutes by {ctx.author.mention}
             """,
@@ -1395,7 +1395,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - enabled",
+            title="scores - enabled",
             description=f"""
               scores enabled by {ctx.author.mention}
             """,
@@ -1411,7 +1411,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - disabled",
+            title="scores - disabled",
             description=f"""
               scores disabled by {ctx.author.mention}
             """,
@@ -1429,7 +1429,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - range changed",
+            title="scores - range changed",
             description=f"""
               range changed to {new_range} by {ctx.author.mention}
             """,
@@ -1450,7 +1450,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - sync enabled",
+            title="scores - sync enabled",
             description=f"""
               channel position sync enabled by {ctx.author.mention}
             """,
@@ -1469,7 +1469,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - sync disabled",
+            title="scores - sync disabled",
             description=f"""
               channel position sync disabled by {ctx.author.mention}
             """,
@@ -1488,12 +1488,12 @@ class CScores(commands.Cog):
         elif modestr == "score":
             mode = True
         else:
-            return await ctx.send(f"mode should be either 'fixed' or 'score'")
+            return await ctx.send("mode should be either 'fixed' or 'score'")
 
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - volume mode changed ",
+            title="scores - volume mode changed ",
             description=f"""
               volume mode changed to {modestr} by {ctx.author.mention}
             """,
