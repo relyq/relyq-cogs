@@ -3,7 +3,7 @@ import math
 import asyncio
 from datetime import datetime, timezone
 from collections import deque
-from typing import Optional
+from typing import List, Optional
 from hashlib import shake_128
 
 import discord
@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from channelscores.models import *
+from channelscores.models import Base, Channel, Category, Guild
 
 
 class ChannelScore:
@@ -323,8 +323,8 @@ class CScores(commands.Cog):
                 )
 
                 # without pins
-                stmt_pins = stmt.where(Channel.pinned == True)
-                stmt = stmt.where(Channel.pinned == False)
+                stmt_pins = stmt.where(Channel.pinned is True)
+                stmt = stmt.where(Channel.pinned is False)
                 scoreboard = deque(session.scalars(stmt).all())
                 # get pins
                 pins = session.scalars(stmt_pins).all()
@@ -399,7 +399,7 @@ class CScores(commands.Cog):
                     if not chan.category.id == cat:
                         try:
                             pos = guild.get_channel(cat).text_channels[-1].position
-                        except:
+                        except Exception:  # no channels - empty list
                             pos = 0
                         await chan.edit(
                             category=guild.get_channel(cat),
@@ -827,7 +827,7 @@ class CScores(commands.Cog):
         await self.log_to_channel(
             self,
             ctx,
-            title=f"scores - thresholds changed",
+            title="scores - thresholds changed",
             description=f"""
             {nl.join(thresholds)}
             updated by {ctx.author.mention}""",
@@ -1523,7 +1523,7 @@ class CScores(commands.Cog):
             untracked_count = (
                 session.query(Channel)
                 .where(Channel.guild_id == ctx.guild.id)
-                .where(Channel.tracked == False)
+                .where(Channel.tracked is False)
                 .count()
             )
 
