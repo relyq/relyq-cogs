@@ -640,6 +640,10 @@ class CScores(commands.Cog):
 
                 points_max = guild.range * total_channels
 
+                # point cap fix
+                if channel.score > points_max:
+                    channel.score = points_max
+
                 # add points & update last message time
                 if channel.score < points_max:
                     channel.score += 1
@@ -672,6 +676,16 @@ class CScores(commands.Cog):
                     since_update = datetime.now(timezone.utc) - c.updated.astimezone(
                         timezone.utc
                     )
+
+                    # point cap fix
+                    total_channels = (
+                        session.query(Channel).where(Channel.guild_id == g.id).count()
+                    )
+
+                    points_max = g.range * total_channels
+
+                    if c.score > points_max:
+                        c.score = points_max
 
                     if (
                         abs(int(since_update.total_seconds())) / 60 >= g.grace
