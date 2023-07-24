@@ -1,6 +1,7 @@
 import time
 import math
 import asyncio
+import logging
 from datetime import datetime, timezone
 from collections import deque
 from typing import List, Optional
@@ -139,6 +140,29 @@ def get_volume_by_id(
     return volume
 
 
+def fix_max_points(session: Session, guild: discord.Guild):
+    stmt = select(Guild).where(Guild.id == guild.id)
+    guild_scores = session.scalars(stmt).first()
+
+    if not guild_scores:
+        raise ValueError("couldn't find guild")
+
+    channels = guild_scores.channels
+
+    stmt = select(Channel).where(Channel.guild_id == guild.id)
+    channels = session.scalars(stmt).all()
+
+    total_channels = len(channels)
+
+    points_max = guild_scores.range * total_channels
+
+    for channel in channels:
+        if channel.score > points_max:
+            channel.score = points_max
+
+    session.commit()
+
+
 async def lis_sort(
     channels: List[ChannelScore], channels_sorted: List[discord.TextChannel], first_pos
 ):
@@ -220,7 +244,10 @@ class CScores(commands.Cog):
 
         self.data_path = data_manager.cog_data_path(self) / "scores.db"
 
-        self.engine = create_engine(f"sqlite://{self.data_path}", echo=True)
+        logging.basicConfig()
+        logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+
+        self.engine = create_engine(f"sqlite://{self.data_path}")
         Base.metadata.create_all(self.engine)
 
         self.main_loop.start()
@@ -323,10 +350,11 @@ class CScores(commands.Cog):
                 )
 
                 # without pins
-                stmt_pins = stmt.where(Channel.pinned is True)
-                stmt = stmt.where(Channel.pinned is False)
-                scoreboard = deque(session.scalars(stmt).all())
+                stmt_nopins = stmt.where(Channel.pinned == 0)
+                scoreboard = deque(session.scalars(stmt_nopins).all())
+
                 # get pins
+                stmt_pins = stmt.where(Channel.pinned == 1)
                 pins = session.scalars(stmt_pins).all()
 
                 # flatten channel list to get insert pins
@@ -533,9 +561,12 @@ class CScores(commands.Cog):
                 stmt = select(Channel).where(Channel.id == channel.id)
 
             session.delete(session.scalars(stmt).first())
+
+            fix_max_points(session, guild)
+
             session.commit()
 
-            # i could load guild from the child channel
+            # i could load guild from the child channel object
             stmt = select(Guild).where(Guild.id == guild.id)
             try:
                 log_channel = guild.get_channel(
@@ -640,10 +671,6 @@ class CScores(commands.Cog):
 
                 points_max = guild.range * total_channels
 
-                # point cap fix
-                if channel.score > points_max:
-                    channel.score = points_max
-
                 # add points & update last message time
                 if channel.score < points_max:
                     channel.score += 1
@@ -677,15 +704,7 @@ class CScores(commands.Cog):
                         timezone.utc
                     )
 
-                    # point cap fix
-                    total_channels = (
-                        session.query(Channel).where(Channel.guild_id == g.id).count()
-                    )
-
-                    points_max = g.range * total_channels
-
-                    if c.score > points_max:
-                        c.score = points_max
+                    # check grace
 
                     if (
                         abs(int(since_update.total_seconds())) / 60 >= g.grace
@@ -1072,7 +1091,7 @@ class CScores(commands.Cog):
         *channels: discord.abc.GuildChannel,
         recursive=False,
     ):
-        """remove channels from the database"""
+        """remove channels from the scoreboard"""
 
         if not channels:
             return await ctx.send("no channels or categories to remove")
@@ -1100,6 +1119,8 @@ class CScores(commands.Cog):
             )
 
             [session.delete(channel) for channel in session.scalars(stmt)]
+
+            fix_max_points(session, ctx.guild)
 
             session.commit()
 
@@ -1319,7 +1340,9 @@ class CScores(commands.Cog):
 
         await ctx.tick()
 
-        return await self.sync_channels(self, ctx.guild)
+        await self.sync_channels(self, ctx.guild)
+
+        return await ctx.send("resync finished")
 
     ### server settings
 
