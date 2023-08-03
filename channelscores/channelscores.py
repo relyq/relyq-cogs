@@ -633,7 +633,7 @@ class CScores(commands.Cog):
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
-        if message.content < 3:
+        if len(message.content) < 3:
             return
         if not message.guild:  # dm
             return
