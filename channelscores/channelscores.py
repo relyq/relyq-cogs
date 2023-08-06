@@ -217,6 +217,7 @@ class CScores(commands.Cog):
     __author__ = "relyq"
 
     __global_grace__ = 60
+    __abuse_minutes__ = 1
 
     def __init__(self, bot):
         self.bot = bot
@@ -630,6 +631,71 @@ class CScores(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
+    # anti-points abuse - deleted post
+    @commands.Cog.listener("on_message_delete")
+    async def on_message_delete(self, message: discord.Message):
+        # message was deleted less than __abuse_minutes__ min after posting
+        if (
+            int((datetime.now(timezone.utc) - message.created_at).total_seconds() / 60)
+            > self.__abuse_minutes__
+        ):
+            return
+
+        with Session(self.engine) as session:
+            stmt = select(Channel).where(Channel.guild_id == message.guild.id)
+            channels = list(session.scalars(stmt).all())
+
+            if message.channel.id not in channels:
+                return
+
+            channel = channels.pop(channels.index(message.channel.id))
+
+            if not channel.tracked:
+                return
+
+            stmt = select(Guild).where(Guild.id == message.guild.id)
+
+            guild_settings = session.scalars(stmt).first()
+
+            # dont remove points
+            """
+            # get last message before deleted
+            last_message: discord.Message = None
+            async for msg in message.channel.history(limit=1):
+                last_message = msg
+
+            # rollback score
+            channel.score -= 1
+
+            # rollback updated time
+            try:
+                channel.updated = last_message.created_at
+            except AttributeError:
+                channel.updated = channel.added
+
+            since_update = datetime.now(timezone.utc) - channel.updated
+
+            # rollback grace
+            channel.grace_count = (since_update.seconds // 60) // guild_settings.grace
+
+            session.commit()
+            """
+
+            try:
+                log_channel = message.guild.get_channel(guild_settings.log_channel)
+            except AttributeError:
+                return
+
+        if log_channel:
+            await log_channel.send(
+                embed=discord.Embed(
+                    title="scores - points abuse detected",
+                    timestamp=datetime.utcnow(),
+                    description=f"{message.channel.mention} deleted a message within {self.__abuse_minutes__} minute from posting",
+                ),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
@@ -704,9 +770,7 @@ class CScores(commands.Cog):
                     if not c.tracked:
                         return
 
-                    since_update = datetime.now(timezone.utc) - c.updated.astimezone(
-                        timezone.utc
-                    )
+                    since_update = datetime.now(timezone.utc) - c.updated
 
                     # check grace
 
@@ -714,7 +778,7 @@ class CScores(commands.Cog):
                         abs(int(since_update.total_seconds())) / 60 >= g.grace
                     ):  # grace ended
                         if c.score > 0:
-                            c.score -= 1 if c.grace_count else 0
+                            c.score -= 1 if c.grace_count > 1 else 0
                             if g.sync:
                                 await self.sync_channels(
                                     self,
