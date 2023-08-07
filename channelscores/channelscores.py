@@ -767,8 +767,9 @@ class CScores(commands.Cog):
                 channels = session.scalars(stmt).all()
 
                 for c in channels:
-                    if not c.tracked:
-                        return
+                    # change to c.paused after implementing paused status
+                    # if not c.tracked:
+                    #     return
 
                     since_update = datetime.now(timezone.utc) - c.updated
 
