@@ -42,6 +42,22 @@ class Blogs(commands.Cog):
         async with self.config.guild(channel.guild).text.active() as active:
             try:
                 del active[str(channel.id)]
+
+                log_channel = channel.guild.get_channel(
+                    await self.config.guild(channel.guild).text.log_channel()
+                )
+
+                if log_channel:
+                    await log_channel.send(
+                        embed=discord.Embed(
+                            title=f"blog deleted",
+                            timestamp=datetime.datetime.utcnow(),
+                            description=f"""
+                          {channel.name} deleted
+                        """,
+                        ),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
             except KeyError:
                 pass
 
