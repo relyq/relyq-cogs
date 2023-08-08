@@ -1623,7 +1623,7 @@ class CScores(commands.Cog):
             untracked_count = (
                 session.query(Channel)
                 .where(Channel.guild_id == ctx.guild.id)
-                .where(Channel.tracked is False)
+                .where(Channel.tracked == False)
                 .count()
             )
 
