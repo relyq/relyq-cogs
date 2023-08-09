@@ -1124,9 +1124,11 @@ class Blogs(commands.Cog):
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
             **max channels:** {settings["maximum"]} channels - {len(settings["active"])} currently active
             **roles:** {humanize_list(roles) or None}
-            **user limit:** {settings["userlimit"]} channels
-            **active:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
+            **blogs per user:** {settings["userlimit"]} channels
+            **threads per blog:** {settings["max_threads"]} threads
+            **threads duration:** {settings["thread_duration"]} minutes
             **role req msg**: {settings["role_req_msg"]}
+            **active:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
             """,
             )
         )
