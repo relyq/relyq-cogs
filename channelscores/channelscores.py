@@ -699,7 +699,7 @@ class CScores(commands.Cog):
     # points win logic
     @commands.Cog.listener("on_message")
     async def on_message_listener(self, message: discord.Message):
-        if len(message.content) < 3:
+        if len(message.content) < 3 and not message.attachments:
             return
         if not message.guild:  # dm
             return
@@ -1664,7 +1664,7 @@ class CScores(commands.Cog):
 
     # public commands
 
-    @commands.command(name="scoreboard", aliases=["board", "top"])
+    @commands.command(name="top", aliases=["board", "scoreboard"])
     async def view_scoreboard(self, ctx: commands.Context, page=1):
         """view the scoreboard"""
         if page < 1:
