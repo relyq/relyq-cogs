@@ -960,10 +960,16 @@ class Blogs(commands.Cog):
     async def blogsset(self, ctx: commands.Context):
         """server wide settings for blogs"""
 
-    @blogsset.command(name="toggle")
-    async def _text_toggle(self, ctx: commands.Context, true_or_false: bool):
-        """toggle whether users can use `[p]blog create` in this server"""
-        await self.config.guild(ctx.guild).text.toggle.set(true_or_false)
+    @blogsset.command(name="enable", aliases=["enabled"])
+    async def enable(self, ctx: commands.Context):
+        """enabled creation of blogs"""
+        await self.config.guild(ctx.guild).text.toggle.set(True)
+        return await ctx.tick()
+
+    @blogsset.command(name="disable", aliases=["disabled"])
+    async def disable(self, ctx: commands.Context):
+        """disable creation of blogs"""
+        await self.config.guild(ctx.guild).text.toggle.set(False)
         return await ctx.tick()
 
     @blogsset.command(name="category")
@@ -1119,7 +1125,7 @@ class Blogs(commands.Cog):
                 title="blogs settings",
                 color=await ctx.embed_color(),
                 description=f"""
-            **toggle:** {settings["toggle"]}
+            **blog creation:** {"enabled" if settings["toggle"] else "disabled"}
             **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
             **max channels:** {settings["maximum"]} channels - {len(settings["active"])} currently active
@@ -1128,7 +1134,7 @@ class Blogs(commands.Cog):
             **threads per blog:** {settings["max_threads"]} threads
             **threads duration:** {settings["thread_duration"]} minutes
             **role req msg**: {settings["role_req_msg"]}
-            **active:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
+            **active blogs:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
             """,
             )
         )
