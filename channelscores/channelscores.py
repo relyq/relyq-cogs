@@ -634,6 +634,8 @@ class CScores(commands.Cog):
     # anti-points abuse - deleted post
     @commands.Cog.listener("on_message_delete")
     async def on_message_delete(self, message: discord.Message):
+        if isinstance(message.channel, discord.channel.DMChannel):
+            return
         # message was deleted less than __abuse_minutes__ min after posting
         if (
             int((datetime.now(timezone.utc) - message.created_at).total_seconds() / 60)
@@ -806,7 +808,7 @@ class CScores(commands.Cog):
         ask for confirmation
         """
         response = await ctx.bot.wait_for(
-            "message", check=MessagePredicate.same_context(ctx)
+            "message", check=MessagePredicate.same_context(ctx), timeout=60
         )
 
         if response.content.lower().startswith("y"):
