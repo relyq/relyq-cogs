@@ -75,7 +75,7 @@ class Blogs(commands.Cog):
 
     @commands.cooldown(1, 30, commands.BucketType.user)
     @blog.command(name="create", aliases=["new", "make"])
-    async def create_blog(self, ctx: commands.Context, name: str):
+    async def create_blog(self, ctx: commands.Context, *, name: str):
         """create your blog"""
 
         if not await self.config.guild(ctx.guild).text.toggle():
@@ -203,7 +203,7 @@ class Blogs(commands.Cog):
         """
         await ctx.send("are you sure you want to delete this forever?? (yes/no)")
         response = await ctx.bot.wait_for(
-            "message", check=MessagePredicate.same_context(ctx)
+            "message", check=MessagePredicate.same_context(ctx), timeout=60
         )
 
         if response.content.lower().startswith("y"):
