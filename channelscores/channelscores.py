@@ -222,26 +222,9 @@ class CScores(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-        self.config = Config.get_conf(
-            self, identifier=1797464170, force_registration=True
-        )
-
         self.DEFAULT_COOLDOWN = 30
         self.DEFAULT_GRACE = 60
         self.DEFAULT_RANGE = 1
-
-        default_guild = {
-            "log_channel": None,
-            "enabled": False,
-            "sync": False,
-            "categories": {},
-            "scoreboard": {},
-            "cooldown": 30,
-            "grace": 60,
-            "range": 1,
-        }
-
-        self.config.register_guild(**default_guild)
 
         self.data_path = data_manager.cog_data_path(self) / "scores.db"
 
