@@ -210,6 +210,13 @@ class Confessions(commands.Cog):
             stmt = select(Confession).where(Confession.id == confession_number)
 
             blocked_confession = session.scalars(stmt).first()
+
+            if (
+                blocked_confession is None
+                or blocked_confession.guild_id != ctx.guild.id
+            ):
+                return await ctx.reply("confession not found")
+
             user = ctx.guild.get_member(blocked_confession.author)
 
             if user is None:
