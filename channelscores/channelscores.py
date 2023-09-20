@@ -295,6 +295,12 @@ class CScores(commands.Cog):
     async def sync_channels(self, guild: discord.Guild):
         with Session(self.engine) as session:
             stmt = select(Guild).where(Guild.id == guild.id)
+
+            sync_enabled = session.scalars(stmt).first().sync
+
+            if not sync_enabled:
+                return
+
             volume_mode = session.scalars(stmt).first().volume_mode
 
             # get thresholds for category
@@ -1040,8 +1046,7 @@ class CScores(commands.Cog):
         )
 
         # check score
-        if await self.config.guild(ctx.guild).sync():
-            await self.sync_channels(self, ctx.guild)
+        await self.sync_channels(self, ctx.guild)
 
         return await ctx.tick()
 
@@ -1165,6 +1170,8 @@ class CScores(commands.Cog):
             stmt = select(Category).where(
                 Category.id.in_([cat.id for cat in sorted_channels["categories"]])
             )
+
+            await self.unlink_categories(ctx, *sorted_channels["categories"])
 
             [session.delete(category) for category in session.scalars(stmt)]
 
