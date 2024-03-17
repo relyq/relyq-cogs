@@ -234,6 +234,8 @@ class CScores(commands.Cog):
         self.engine = create_engine(f"sqlite://{self.data_path}")
         Base.metadata.create_all(self.engine)
 
+        asyncio.sleep(10)
+
         self.main_loop.start()
 
     def cog_unload(self):
