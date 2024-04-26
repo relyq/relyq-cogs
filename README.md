@@ -11,3 +11,7 @@ https://relyq.dev/projects/blogs_bot/
 ### channel scores
 
 channels get points every time someone posts in the channel and you can sync the scoreboard to discord's channel list to sort the channels by score
+
+i could add exception hooks to get a dm for all uncaught exceptions
+
+https://martinheinz.dev/blog/66
