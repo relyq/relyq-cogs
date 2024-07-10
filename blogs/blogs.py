@@ -25,6 +25,7 @@ class Blogs(commands.Cog):
         default_guild = {
             "text": {
                 "category": None,
+                "ignored_category": None,
                 "log_channel": None,
                 "maximum": 10,
                 "roles": [],
