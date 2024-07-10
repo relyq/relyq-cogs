@@ -1215,6 +1215,7 @@ class Blogs(commands.Cog):
                     pass
                 try:
                     blocked = [ctx.guild.get_member(u) for u in c["blocked"]]
+                    await ctx.send(blocked)
                 except KeyError:
                     pass
                 try:
