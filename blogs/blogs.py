@@ -1145,6 +1145,7 @@ class Blogs(commands.Cog):
             **cog version:** {self.__version__}
             **blog creation:** {"enabled" if settings["toggle"] else "disabled"}
             **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
+            **ignored category:** {"None" if settings["ignored_category"] is None else ctx.guild.get_channel(settings["ignored_category"]).name}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
             **max channels:** {settings["maximum"]} channels - {len(settings["active"])} currently active
             **roles:** {humanize_list(roles) or None}
