@@ -1152,7 +1152,7 @@ class Blogs(commands.Cog):
             **threads per blog:** {settings["max_threads"]} threads
             **threads duration:** {settings["thread_duration"]} minutes
             **role req msg**: {settings["role_req_msg"]}
-            **active blogs:** {humanize_list() or None}
+            **active blogs:** {humanize_list(active_blogs) or None}
             """,
             )
         )
