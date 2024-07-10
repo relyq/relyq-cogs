@@ -1129,25 +1129,28 @@ class Blogs(commands.Cog):
             if r := ctx.guild.get_role(role):
                 roles.append(r.name)
 
-        return await ctx.send(
-            embed=discord.Embed(
-                title="blogs settings",
-                color=await ctx.embed_color(),
-                description=f"""
-            **cog version:** {self.__version__}
-            **blog creation:** {"enabled" if settings["toggle"] else "disabled"}
-            **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
-            **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
-            **max channels:** {settings["maximum"]} channels - {len(settings["active"])} currently active
-            **roles:** {humanize_list(roles) or None}
-            **blogs per user:** {settings["userlimit"]} channels
-            **threads per blog:** {settings["max_threads"]} threads
-            **threads duration:** {settings["thread_duration"]} minutes
-            **role req msg**: {settings["role_req_msg"]}
-            **active blogs:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
-            """,
+        try:
+            return await ctx.send(
+                embed=discord.Embed(
+                    title="blogs settings",
+                    color=await ctx.embed_color(),
+                    description=f"""
+                **cog version:** {self.__version__}
+                **blog creation:** {"enabled" if settings["toggle"] else "disabled"}
+                **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
+                **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
+                **max channels:** {settings["maximum"]} channels - {len(settings["active"])} currently active
+                **roles:** {humanize_list(roles) or None}
+                **blogs per user:** {settings["userlimit"]} channels
+                **threads per blog:** {settings["max_threads"]} threads
+                **threads duration:** {settings["thread_duration"]} minutes
+                **role req msg**: {settings["role_req_msg"]}
+                **active blogs:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["active"]]) or None}
+                """,
+                )
             )
-        )
+        except AttributeError as e:
+            return await ctx.send(e)
 
     @commands.bot_has_permissions(embed_links=True)
     @commands.cooldown(1, 10, commands.BucketType.user)
