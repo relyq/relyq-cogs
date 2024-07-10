@@ -15,6 +15,7 @@ class Blogs(commands.Cog):
     """blog manager"""
 
     __author__ = "relyq#0001"
+    __version__ = "0.9"
 
     def __init__(self, bot):
         self.bot = bot
@@ -980,6 +981,14 @@ class Blogs(commands.Cog):
         await self.config.guild(ctx.guild).text.category.set(category.id)
         return await ctx.tick()
 
+    @blogsset.command(name="ignored_category", aliases=["ignored"])
+    async def _text_category(
+        self, ctx: commands.Context, category: discord.CategoryChannel
+    ):
+        """set the category for ignored blogs on resync - def: none"""
+        await self.config.guild(ctx.guild).text.ignored_category.set(category.id)
+        return await ctx.tick()
+
     @blogsset.command(name="max_channels")
     async def _text_maxchannels(self, ctx: commands.Context, maximum: int):
         """set the maximum amount of total blog channels that can be created - def: 10"""
@@ -1112,7 +1121,7 @@ class Blogs(commands.Cog):
     @commands.bot_has_permissions(embed_links=True)
     @blogsset.command(name="view", aliases=["v"])
     async def view_settings(self, ctx: commands.Context):
-        """view the current blogs settings"""
+        """view the current blogs cog settings"""
         settings = await self.config.guild(ctx.guild).text()
 
         roles = []
@@ -1125,6 +1134,7 @@ class Blogs(commands.Cog):
                 title="blogs settings",
                 color=await ctx.embed_color(),
                 description=f"""
+            **cog version:** {self.__version__}
             **blog creation:** {"enabled" if settings["toggle"] else "disabled"}
             **category:** {"None" if settings["category"] is None else ctx.guild.get_channel(settings["category"]).name}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
@@ -1163,6 +1173,7 @@ class Blogs(commands.Cog):
         category = self.bot.get_channel(
             await self.config.guild(ctx.guild).text.category()
         )
+        ignored_category_id = await self.config.guild(ctx.guild).text.ignored_category()
 
         await ctx.send("starting resync")
 
@@ -1174,6 +1185,11 @@ class Blogs(commands.Cog):
             try:
                 c = active[chan]
                 channel = ctx.guild.get_channel(int(chan))
+
+                # blog is archived - don't sync
+                if channel.category_id == ignored_category_id:
+                    continue
+
                 owner = ctx.guild.get_member(c["owner"])
 
                 # must be inside the loop else perms are carried over from last blog
