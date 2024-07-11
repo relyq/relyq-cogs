@@ -1211,10 +1211,12 @@ class Blogs(commands.Cog):
 
                 try:
                     shared = [ctx.guild.get_member(u) for u in c["shared"]]
+                    shared = filter(None, shared)
                 except KeyError:
                     pass
                 try:
                     blocked = [ctx.guild.get_member(u) for u in c["blocked"]]
+                    blocked = filter(None, blocked)
                     await ctx.send(blocked)
                 except KeyError:
                     pass
