@@ -958,7 +958,7 @@ class Blogs(commands.Cog):
     # mod commands
 
     @commands.group(name="blogset", aliases=["blogsettings", "blogssettings", "bs"])
-    @commands.admin_or_permissions(administrator=True)
+    @commands.admin_or_permissions(manage_channels=True)
     async def blogsset(self, ctx: commands.Context):
         """server wide settings for blogs"""
 
