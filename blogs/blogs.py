@@ -1188,7 +1188,7 @@ class Blogs(commands.Cog):
         await ctx.send("starting resync")
 
         err = [
-            "AttributeError exception ignored for channels - some of the blog members might not be in the server: "
+            "AttributeError exception ignored for channels - blog owner might not be in the server: "
         ]
 
         for chan in active:
@@ -1208,6 +1208,7 @@ class Blogs(commands.Cog):
                 # note these are about to be discord.Member - not ids
                 shared = []
                 blocked = []
+                hidden = []
 
                 try:
                     shared = [ctx.guild.get_member(u) for u in c["shared"]]
@@ -1217,7 +1218,11 @@ class Blogs(commands.Cog):
                 try:
                     blocked = [ctx.guild.get_member(u) for u in c["blocked"]]
                     blocked = filter(None, blocked)
-                    await ctx.send(blocked)
+                except KeyError:
+                    pass
+                try:
+                    hidden = [ctx.guild.get_member(u) for u in c["hidden"]]
+                    hidden = filter(None, hidden)
                 except KeyError:
                     pass
                 try:
@@ -1254,6 +1259,15 @@ class Blogs(commands.Cog):
                     overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
                     overwrites[u].update(
                         view_channel=None,
+                        manage_messages=None,
+                        send_messages=False,
+                        add_reactions=False,
+                    )
+
+                for u in hidden:
+                    overwrites[u] = overwrites.get(u, discord.PermissionOverwrite())
+                    overwrites[u].update(
+                        view_channel=False,
                         manage_messages=None,
                         send_messages=False,
                         add_reactions=False,
