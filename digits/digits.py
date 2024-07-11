@@ -21,24 +21,25 @@ class Digits(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.config = Config.get_conf(
-            self, identifier=8181223, force_registration=True
-        )
+        self.config = Config.get_conf(self, identifier=8181223, force_registration=True)
 
-        default_guild = {
-            "settings": {
-                "channels": []
-            }
-        }
+        default_guild = {"settings": {"channels": []}}
         self.config.register_guild(**default_guild)
 
     @commands.Cog.listener("on_message")
     async def _message_listener(self, message):
-        if message.channel.id not in await self.config.guild(message.guild).settings.channels():
+        if not message.guild:  # dm
+            return
+        if (
+            message.channel.id
+            not in await self.config.guild(message.guild).settings.channels()
+        ):
             return
 
         if message.id % 10000 in self.quads:
-            await message.reply(content=f"{str(message.id)[-8:]} quads!!!!", silent=True)
+            await message.reply(
+                content=f"{str(message.id)[-8:]} quads!!!!", silent=True
+            )
             return
         if message.id % 1000 in self.trips:
             await message.reply(content=f"{str(message.id)[-8:]} trips!!!", silent=True)
@@ -54,17 +55,19 @@ class Digits(commands.Cog):
     async def digits_settings(self, ctx):
         """server wide settings for digits"""
 
-    @ digits_settings.group(name="channels")
+    @digits_settings.group(name="channels")
     async def channels(self, ctx):
         """settings for channels to check digits"""
 
-    @ channels.command(name="set")
+    @channels.command(name="set")
     async def roles_set(self, ctx: commands.Context, *channels: discord.TextChannel):
         """set the channels - this will overwrite the list"""
-        await self.config.guild(ctx.guild).settings.channels.set([c.id for c in channels])
+        await self.config.guild(ctx.guild).settings.channels.set(
+            [c.id for c in channels]
+        )
         return await ctx.tick()
 
-    @ channels.command(name="add")
+    @channels.command(name="add")
     async def roles_add(self, ctx: commands.Context, *channels: discord.TextChannel):
         """add a role allowed to the list"""
         set_channels = await self.config.guild(ctx.guild).settings.channels()
@@ -76,7 +79,7 @@ class Digits(commands.Cog):
         await self.config.guild(ctx.guild).settings.channels.set(set_channels)
         return await ctx.tick()
 
-    @ channels.command(name="remove")
+    @channels.command(name="remove")
     async def roles_remove(self, ctx: commands.Context, *channels: discord.TextChannel):
         """add a channel to the list"""
         set_channels = await self.config.guild(ctx.guild).settings.channels()
@@ -88,8 +91,8 @@ class Digits(commands.Cog):
         await self.config.guild(ctx.guild).settings.channels.set(set_channels)
         return await ctx.tick()
 
-    @ commands.bot_has_permissions(embed_links=True)
-    @ digits_settings.command(name="view", aliases=["v"])
+    @commands.bot_has_permissions(embed_links=True)
+    @digits_settings.command(name="view", aliases=["v"])
     async def view_settings(self, ctx: commands.Context):
         """view the current digits settings"""
         settings = await self.config.guild(ctx.guild).settings()
@@ -99,10 +102,12 @@ class Digits(commands.Cog):
             if c := ctx.guild.get_channel(c):
                 channels.append(c.name)
 
-        return await ctx.send(embed=discord.Embed(
-            title="digits settings",
-            color=await ctx.embed_color(),
-            description=f"""
+        return await ctx.send(
+            embed=discord.Embed(
+                title="digits settings",
+                color=await ctx.embed_color(),
+                description=f"""
             **channels:** {humanize_list([ctx.guild.get_channel(int(c)).mention for c in settings["channels"]]) or None}
-            """
-        ))
+            """,
+            )
+        )
