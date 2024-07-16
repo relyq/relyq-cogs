@@ -158,13 +158,13 @@ class Digits(commands.Cog):
     @digits_settings.command(name="enable", aliases=["enabled"])
     async def enable(self, ctx):
         """enable digits"""
-        await self.config.guild(ctx.guild).settings.enabled(True)
+        await self.config.guild(ctx.guild).settings.enabled.set(True)
         return await ctx.tick()
 
     @digits_settings.command(name="disable", aliases=["disabled"])
     async def disable(self, ctx):
         """disable digits"""
-        await self.config.guild(ctx.guild).settings.enabled(False)
+        await self.config.guild(ctx.guild).settings.enabled.set(False)
         return await ctx.tick()
 
     @digits_settings.group(name="channels")
