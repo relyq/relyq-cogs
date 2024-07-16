@@ -82,11 +82,11 @@ class VanityCheck(commands.Cog):
                     await guild.edit(vanity_code=settings["new_vanity"])
                 except Exception as e:
                     # failed
-                    log_channel.send(f"couldn't claim vanity - {e}")
+                    await log_channel.send(f"couldn't claim vanity - {e}")
                     continue
 
                 # success
-                log_channel.send(
+                await log_channel.send(
                     f"vanity claimed - discord.gg/{settings['new_vanity']} - {[guild.get_member(u).mention for u in settings['pings']]}"
                 )
 
