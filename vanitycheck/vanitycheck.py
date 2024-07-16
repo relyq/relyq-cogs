@@ -122,13 +122,13 @@ class VanityCheck(commands.Cog):
                 "please make sure new vanity, log channel, and pinged users are set before enabling"
             )
 
-        await self.config.guild(ctx.guild).settings.enabled(True)
+        await self.config.guild(ctx.guild).settings.enabled.set(True)
         return await ctx.tick()
 
     @vanitycheck.command(name="disable")
     async def disable(self, ctx: commands.Context):
         """disable vanitycheck"""
-        await self.config.guild(ctx.guild).settings.enabled(False)
+        await self.config.guild(ctx.guild).settings.enabled.set(False)
         return await ctx.tick()
 
     @vanitycheck.command(name="settings", aliases=["view"])
