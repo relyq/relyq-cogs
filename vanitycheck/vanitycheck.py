@@ -45,6 +45,7 @@ class VanityCheck(commands.Cog):
 
                 # success
                 log_channel.send(f"vanity claimed - discord.gg/{g["new_vanity"]} - {[u.mention for u in g["pings"]]}")
+                await self.config.guild(g).settings.enabled(False)
 
     @commands.cooldown(1, 5, commands.BucketType.user)
     @commands.group(name="vanitycheck")
