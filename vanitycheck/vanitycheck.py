@@ -68,6 +68,7 @@ class VanityCheck(commands.Cog):
 
         for g in guilds:
             settings = guilds[g]["settings"]
+            print(settings)
             if (
                 settings["enabled"]
                 and settings["new_vanity"]
