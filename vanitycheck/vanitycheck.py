@@ -67,18 +67,18 @@ class VanityCheck(commands.Cog):
         guilds = await self.config.all_guilds()
 
         for g in guilds:
-            print(guilds[g])
+            settings = guilds[g]["settings"]
             if (
-                guilds[g]["enabled"]
-                and guilds[g]["new_vanity"]
-                and guilds[g]["log_channel"]
+                settings["enabled"]
+                and settings["new_vanity"]
+                and settings["log_channel"]
             ):
                 guild = await self.bot.get_guild(g)
 
-                log_channel = await self.bot.get_channel(g["log_channel"])
+                log_channel = await self.bot.get_channel(settings["log_channel"])
 
                 try:
-                    await guild.edit(vanity_code=g["new_vanity"])
+                    await guild.edit(vanity_code=settings["new_vanity"])
                 except Exception as e:
                     # failed
                     log_channel.send(f"couldn't claim vanity - {e}")
@@ -86,7 +86,7 @@ class VanityCheck(commands.Cog):
 
                 # success
                 log_channel.send(
-                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[guild.get_member(u).mention for u in g['pings']]}"
+                    f"vanity claimed - discord.gg/{settings['new_vanity']} - {[guild.get_member(u).mention for u in settings['pings']]}"
                 )
 
     @vanitycheck.command(name="set")
