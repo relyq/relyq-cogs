@@ -752,7 +752,7 @@ class CScores(commands.Cog):
             guilds = session.scalars(stmt).all()
             for g in guilds:
                 if not g.enabled:
-                    return
+                    continue
 
                 stmt = select(Channel).where(Channel.guild_id == g.id)
                 channels = session.scalars(stmt).all()
