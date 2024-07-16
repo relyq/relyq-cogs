@@ -74,7 +74,7 @@ class VanityCheck(commands.Cog):
                 and settings["new_vanity"]
                 and settings["log_channel"]
             ):
-                guild = await self.bot.get_guild(g)
+                guild = self.bot.get_guild(g)
 
                 log_channel = await self.bot.get_channel(settings["log_channel"])
 
