@@ -67,7 +67,7 @@ class VanityCheck(commands.Cog):
         guilds = await self.config.all_guilds()
 
         for g in guilds:
-            settings = await self.config.guild(g).settings()
+            settings = await self.config.g.settings()
 
             if (
                 settings["enabled"]
