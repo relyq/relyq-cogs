@@ -50,7 +50,7 @@ class VanityCheck(commands.Cog):
 
                 # success
                 log_channel.send(
-                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[u.mention for u in g['pings']]}"
+                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[guild.get_member(u).mention for u in g['pings']]}"
                 )
                 await self.config.guild(g).settings.enabled(False)
 
@@ -81,7 +81,7 @@ class VanityCheck(commands.Cog):
 
                 # success
                 log_channel.send(
-                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[u.mention for u in g['pings']]}"
+                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[guild.get_member(u).mention for u in g['pings']]}"
                 )
 
     @vanitycheck.command(name="set")
@@ -138,6 +138,7 @@ class VanityCheck(commands.Cog):
             **enabled:** {"true" if settings["enabled"] else "false"}
             **new vanity:** {settings["new_vanity"]}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
+            **users to ping:** {[ctx.guild.get_member(u).mention for u in settings["pings"]]}
             """,
             )
         )
