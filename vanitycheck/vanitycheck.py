@@ -76,7 +76,7 @@ class VanityCheck(commands.Cog):
             ):
                 guild = self.bot.get_guild(g)
 
-                log_channel = await self.bot.get_channel(settings["log_channel"])
+                log_channel = self.bot.get_channel(settings["log_channel"])
 
                 try:
                     await guild.edit(vanity_code=settings["new_vanity"])
