@@ -21,7 +21,12 @@ class VanityCheck(commands.Cog):
         )
 
         default_guild = {
-            "settings": {"enabled": False, "log_channel": None, "new_vanity": None, "pings": []}
+            "settings": {
+                "enabled": False,
+                "log_channel": None,
+                "new_vanity": None,
+                "pings": [],
+            }
         }
 
         self.config.register_guild(**default_guild)
@@ -44,7 +49,9 @@ class VanityCheck(commands.Cog):
                     continue
 
                 # success
-                log_channel.send(f"vanity claimed - discord.gg/{g["new_vanity"]} - {[u.mention for u in g["pings"]]}")
+                log_channel.send(
+                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[u.mention for u in g['pings']]}"
+                )
                 await self.config.guild(g).settings.enabled(False)
 
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -73,7 +80,9 @@ class VanityCheck(commands.Cog):
                     continue
 
                 # success
-                log_channel.send(f"vanity claimed - discord.gg/{g["new_vanity"]} - {[u.mention for u in g["pings"]]}")
+                log_channel.send(
+                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[u.mention for u in g['pings']]}"
+                )
 
     @vanitycheck.command(name="set")
     async def set_vanity(self, ctx: commands.Context, new_vanity: str):
@@ -100,8 +109,12 @@ class VanityCheck(commands.Cog):
         """enable vanitycheck"""
         settings = await self.config.guild(ctx.guild).settings()
 
-        if not (settings["new_vanity"] and settings["log_channel"] and settings["pings"]):
-            return await ctx.send("please make sure new vanity, log channel, and pinged users are set before enabling")
+        if not (
+            settings["new_vanity"] and settings["log_channel"] and settings["pings"]
+        ):
+            return await ctx.send(
+                "please make sure new vanity, log channel, and pinged users are set before enabling"
+            )
 
         await self.config.guild(ctx.guild).settings.enabled(True)
         return await ctx.tick()
