@@ -36,37 +36,6 @@ class VanityCheck(commands.Cog):
         guilds = await self.config.all_guilds()
 
         for g in guilds:
-            if g["enabled"] and g["new_vanity"] and g["log_channel"]:
-                guild = await self.bot.get_guild(g)
-
-                log_channel = await self.bot.get_channel(g["log_channel"])
-
-                try:
-                    await guild.edit(vanity_code=g["new_vanity"])
-                except Exception as e:
-                    # failed
-                    log_channel.send(f"couldn't claim vanity - {e}")
-                    continue
-
-                # success
-                log_channel.send(
-                    f"vanity claimed - discord.gg/{g['new_vanit']} - {[guild.get_member(u).mention for u in g['pings']]}"
-                )
-                await self.config.guild(g).settings.enabled(False)
-
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    @commands.group(name="vanitycheck")
-    @commands.guild_only()
-    @commands.admin()
-    async def vanitycheck(self, ctx: commands.Context):
-        """vanity check"""
-
-    @vanitycheck.command(name="test")
-    async def test(self, ctx: commands.Context):
-        """test"""
-        guilds = await self.config.all_guilds()
-
-        for g in guilds:
             settings = guilds[g]["settings"]
             print(settings)
             if (
@@ -89,6 +58,13 @@ class VanityCheck(commands.Cog):
                 await log_channel.send(
                     f"vanity claimed - discord.gg/{settings['new_vanity']} - {[guild.get_member(u).mention for u in settings['pings']]}"
                 )
+
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    @commands.group(name="vanitycheck")
+    @commands.guild_only()
+    @commands.admin()
+    async def vanitycheck(self, ctx: commands.Context):
+        """vanity check"""
 
     @vanitycheck.command(name="set")
     async def set_vanity(self, ctx: commands.Context, new_vanity: str):
