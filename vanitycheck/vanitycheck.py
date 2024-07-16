@@ -67,7 +67,7 @@ class VanityCheck(commands.Cog):
         guilds = await self.config.all_guilds()
 
         for g in guilds:
-            print(guilds[g]["new_vanity"])
+            print(guilds[g])
             if (
                 guilds[g]["enabled"]
                 and guilds[g]["new_vanity"]
