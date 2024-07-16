@@ -67,8 +67,12 @@ class VanityCheck(commands.Cog):
         guilds = await self.config.all_guilds()
 
         for g in guilds:
-            print(g)
-            if g["enabled"] and g["new_vanity"] and g["log_channel"]:
+            print(guilds[g]["new_vanity"])
+            if (
+                guilds[g]["enabled"]
+                and guilds[g]["new_vanity"]
+                and guilds[g]["log_channel"]
+            ):
                 guild = await self.bot.get_guild(g)
 
                 log_channel = await self.bot.get_channel(g["log_channel"])
