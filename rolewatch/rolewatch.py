@@ -3,7 +3,7 @@ import discord
 from redbot.core import commands, Config
 
 
-class RoleWarn(commands.Cog):
+class RoleWatch(commands.Cog):
     """warn when roles are given"""
 
     __author__ = "relyq"
@@ -38,9 +38,9 @@ class RoleWarn(commands.Cog):
         if prev.roles == new.roles:
             return
 
-        watched_roles = [guild.get_role(r.id) for r in settings["watched_roles"]]
+        watched_roles = [guild.get_role(rid) for rid in settings["watched_roles"]]
 
-        pinged_roles = [guild.get_role(r.id) for r in settings["pinged_roles"]]
+        pinged_roles = [guild.get_role(rid) for rid in settings["pinged_roles"]]
 
         for wrole in watched_roles:
             if wrole in new.roles and wrole not in prev.roles:
@@ -49,13 +49,13 @@ class RoleWarn(commands.Cog):
                 )
 
     @commands.cooldown(1, 5, commands.BucketType.user)
-    @commands.group(name="rolewarn")
+    @commands.group(name="rolewatch")
     @commands.guild_only()
     @commands.admin()
-    async def rolewarn(self, ctx: commands.Context):
-        """role warn"""
+    async def rolewatch(self, ctx: commands.Context):
+        """role watch"""
 
-    @rolewarn.command(name="log")
+    @rolewatch.command(name="log")
     async def set_log_channel(
         self, ctx: commands.Context, log_channel: discord.TextChannel
     ):
@@ -63,7 +63,7 @@ class RoleWarn(commands.Cog):
         await self.config.guild(ctx.guild).settings.log_channel.set(log_channel.id)
         return await ctx.tick()
 
-    @rolewarn.command(name="watch")
+    @rolewatch.command(name="watch")
     async def watch_roles(self, ctx: commands.Context, *roles: discord.Role):
         """set the roles to watch"""
         await self.config.guild(ctx.guild).settings.watched_roles.set(
@@ -71,7 +71,7 @@ class RoleWarn(commands.Cog):
         )
         return await ctx.tick()
 
-    @rolewarn.command(name="pings")
+    @rolewatch.command(name="ping")
     async def ping_roles(self, ctx: commands.Context, *roles: discord.Role):
         """set the roles to ping when a role is given"""
         await self.config.guild(ctx.guild).settings.pinged_roles.set(
@@ -79,9 +79,9 @@ class RoleWarn(commands.Cog):
         )
         return await ctx.tick()
 
-    @rolewarn.command(name="enable")
+    @rolewatch.command(name="enable")
     async def enable(self, ctx: commands.Context):
-        """enable rolewarn"""
+        """enable rolewatch"""
         settings = await self.config.guild(ctx.guild).settings()
 
         if not (settings["log_channel"]):
@@ -90,26 +90,26 @@ class RoleWarn(commands.Cog):
         await self.config.guild(ctx.guild).settings.enabled.set(True)
         return await ctx.tick()
 
-    @rolewarn.command(name="disable")
+    @rolewatch.command(name="disable")
     async def disable(self, ctx: commands.Context):
-        """disable rolewarn"""
+        """disable rolewatch"""
         await self.config.guild(ctx.guild).settings.enabled.set(False)
         return await ctx.tick()
 
-    @rolewarn.command(name="settings", aliases=["view"])
+    @rolewatch.command(name="settings", aliases=["view"])
     async def view_settings(self, ctx: commands.Context):
-        """view rolewarn settings"""
+        """view rolewatch settings"""
         settings = await self.config.guild(ctx.guild).settings()
 
         return await ctx.send(
             embed=discord.Embed(
-                title="rolewarn settings",
+                title="rolewatch settings",
                 color=await ctx.embed_color(),
                 description=f"""
             **enabled:** {"true" if settings["enabled"] else "false"}
             **log channel:** {"None" if settings["log_channel"] is None else ctx.guild.get_channel(settings["log_channel"]).mention}
-            **watched roles:** {[ctx.guild.get_role(r).mention for r in settings["watched_roles"]]}
-            **roles to ping:** {[ctx.guild.get_role(r).mention for r in settings["pinged_roles"]]}
+            **watched roles:** {[ctx.guild.get_role(rid).mention for rid in settings["watched_roles"]]}
+            **roles to ping:** {[ctx.guild.get_role(rid).mention for rid in settings["pinged_roles"]]}
             """,
             )
         )
