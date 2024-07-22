@@ -1,11 +1,9 @@
 import discord
 
-from discord.ext import tasks
-
 from redbot.core import commands, Config
 
 
-class rolewarn(commands.Cog):
+class RoleWarn(commands.Cog):
     """warn when roles are given"""
 
     __author__ = "relyq"
