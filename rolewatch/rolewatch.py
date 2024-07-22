@@ -45,7 +45,8 @@ class RoleWatch(commands.Cog):
         for wrole in watched_roles:
             if wrole in new.roles and wrole not in prev.roles:
                 return await guild.get_channel(settings["log_channel"]).send(
-                    f"{[r.mention for r in pinged_roles]} - role {wrole.mention} given to {new.mention}"
+                    f"""{[r.mention for r in pinged_roles]}
+                    role {wrole.mention} given to {new.mention}"""
                 )
 
     @commands.cooldown(1, 5, commands.BucketType.user)
