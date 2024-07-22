@@ -49,6 +49,7 @@ class RoleWatch(commands.Cog):
 {[r.mention for r in pinged_roles]}
 role {wrole.mention} given to {new.mention}""",
                     silent=False,
+                    allowed_mentions=discord.AllowedMentions(everyone=True),
                 )
 
     @commands.cooldown(1, 5, commands.BucketType.user)
