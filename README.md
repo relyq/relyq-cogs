@@ -2,6 +2,8 @@
 
 ### blogs
 
+- i should add a hook whenever the category gets deleted to fix internal sync, otherwise when cat id is fetched the object is none
+
 let users create their own channels - they will be given manage messages perms, and will have an interface to manage the channel settings
 
 docs here
